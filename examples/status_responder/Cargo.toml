@@ -1,0 +1,13 @@
+[package]
+name = "status_responder"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.56"
+log = "0.4.16"
+mc_protocol = { path = "../.." }
+custom_packets = { path = "../custom_packets" }
+tokio = { version = "1.17.0", features = ["full"] }
+tokio-stream = { version = "0.1.8" }
+tokio-util = { version = "0.7.1", features = ["full"] }
