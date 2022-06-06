@@ -176,10 +176,12 @@ macro_rules! packets {
 
             impl $crate::packets::packet::ProtocolSheetEchoCandidate for $packet_name {
                 fn echo_packet_handle<Context: Send + Sync>() -> $crate::packets::packet::MetaPacketHandle<Context, Self> {
-                    Box::new(|_, _, handle| {
-                        println!("Echo {handle:?}");
-                        Ok(())
-                    })
+                    |_, _, handle| {
+                        Box::pin(async move {
+                            println!("Echo {handle:?}");
+                            Ok(())
+                        })
+                    }
                 }
             }
         )*

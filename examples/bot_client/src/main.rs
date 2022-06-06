@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use tokio::net::TcpStream;
 use custom_packets::CustomPayload;
+use mc_protocol::packets::client_bound::status::StatusResponse;
 
 const STATUS: bool = true;
 const TARGET_IP: &'static str = "127.0.0.1";
@@ -21,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn spin_status_req() -> anyhow::Result<()> {
+async fn spin_status_req() -> anyhow::Result<StatusResponse> {
     use client_bound::status::{Pong, StatusResponse};
     use server_bound::handshaking::{Handshake, NextState};
     use server_bound::status::StatusRequest;

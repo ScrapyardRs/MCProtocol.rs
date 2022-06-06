@@ -3,21 +3,20 @@ use crate::{Decodable, ProtocolDecodable, ProtocolVersion};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
+use futures::future::BoxFuture;
 
 pub struct NoContext;
 
+pub type PacketFuture<'handle_life> = BoxFuture<'handle_life, anyhow::Result<()>>;
+
+pub type MetaPacketHandle<Context, Type> = fn(&mut ProtocolSheet<Context>, &mut Context, Type) -> PacketFuture<'static>;
 pub type GenericPacketHandle<Context> = Box<
     dyn Fn(
         &mut ProtocolSheet<Context>,
         &mut Context,
         ProtocolVersion,
         &mut Cursor<Vec<u8>>,
-    ) -> anyhow::Result<()>
-    + Send
-    + Sync,
->;
-pub type MetaPacketHandle<Context, Type> = Box<
-    dyn Fn(&mut ProtocolSheet<Context>, &mut Context, Type) -> anyhow::Result<()> + Send + Sync,
+    ) -> PacketFuture<'static>,
 >;
 
 pub trait StaticProtocolMappings {
@@ -56,7 +55,7 @@ impl<Context> ProtocolSheet<Context>
             move |sheet, context, protocol_version, raw_buf| {
                 let t_resolved = protocol_decodable(protocol_version, raw_buf).unwrap();
                 meta_handle(sheet, context, t_resolved)
-            },
+            }
         ));
 
         for mapping in T::get_protocol_mappings() {
@@ -76,13 +75,13 @@ impl<Context> ProtocolSheet<Context>
         &mut self,
         context: &mut Context,
         mut raw_buf: Cursor<Vec<u8>>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<PacketFuture<'static>> {
         let packet_id = VarInt::decode(&mut raw_buf)?;
         let generic_packet_handle = &self.mappings.get(&(self.protocol_version, packet_id));
         if let Some(packet_handle) = generic_packet_handle {
-            Arc::clone(packet_handle)(self, context, self.protocol_version, &mut raw_buf)
+            Ok(Arc::clone(packet_handle)(self, context, self.protocol_version, &mut raw_buf))
         } else {
-            Ok(())
+            Ok(Box::pin(async move { Ok(()) }))
         }
     }
 
