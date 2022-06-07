@@ -31,7 +31,7 @@ macro_rules! packets {
                 }
             }
 
-            impl $crate::packets::packet::StaticProtocolMappings for $packet_name {
+            impl $crate::packets::StaticProtocolMappings for $packet_name {
                 fn get_protocol_mappings() -> Vec<($crate::encoding::ProtocolVersion, $crate::types::nums::VarInt)> {
                     vec![
                         $(

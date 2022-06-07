@@ -14,4 +14,9 @@ flate2 = "1.0.23"
 futures = "0.3.21"
 hematite-nbt = "0.5.2"
 log = "0.4.16"
+typemap_rev = "0.1.5"
 uuid = "0.8.2"
+
+[dependencies.tokio]
+version = "1.18.2"
+features = ["sync"]

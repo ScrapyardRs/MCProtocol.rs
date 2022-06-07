@@ -3,6 +3,7 @@ use crate::{Decodable, ProtocolDecodable, ProtocolVersion};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
+use super::StaticProtocolMappings;
 
 pub struct NoContext;
 
@@ -19,10 +20,6 @@ pub type GenericPacketHandle<Context> = Box<
 pub type MetaPacketHandle<Context, Type> = Box<
     dyn Fn(&mut ProtocolSheet<Context>, &mut Context, Type) -> anyhow::Result<()> + Send + Sync,
 >;
-
-pub trait StaticProtocolMappings {
-    fn get_protocol_mappings() -> Vec<(ProtocolVersion, VarInt)>;
-}
 
 pub trait ProtocolSheetEchoCandidate {
     fn echo_packet_handle<Context: Send + Sync>() -> MetaPacketHandle<Context, Self>;
