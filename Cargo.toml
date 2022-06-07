@@ -19,4 +19,4 @@ uuid = "0.8.2"
 
 [dependencies.tokio]
 version = "1.18.2"
-features = ["sync"]
+features = ["sync", "net", "io-util"]
