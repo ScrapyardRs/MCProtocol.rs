@@ -1,21 +1,21 @@
+use super::StaticProtocolMappings;
 use crate::types::VarInt;
 use crate::{Decodable, ProtocolDecodable, ProtocolVersion};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
-use super::StaticProtocolMappings;
 
 pub struct NoContext;
 
 pub type GenericPacketHandle<Context> = Box<
     dyn Fn(
-        &mut ProtocolSheet<Context>,
-        &mut Context,
-        ProtocolVersion,
-        &mut Cursor<Vec<u8>>,
-    ) -> anyhow::Result<()>
-    + Send
-    + Sync,
+            &mut ProtocolSheet<Context>,
+            &mut Context,
+            ProtocolVersion,
+            &mut Cursor<Vec<u8>>,
+        ) -> anyhow::Result<()>
+        + Send
+        + Sync,
 >;
 pub type MetaPacketHandle<Context, Type> = Box<
     dyn Fn(&mut ProtocolSheet<Context>, &mut Context, Type) -> anyhow::Result<()> + Send + Sync,
@@ -31,8 +31,8 @@ pub struct ProtocolSheet<Context: Send + Sync> {
 }
 
 impl<Context> ProtocolSheet<Context>
-    where
-        Context: Send + Sync + 'static,
+where
+    Context: Send + Sync + 'static,
 {
     pub fn new(protocol_version: ProtocolVersion) -> Self {
         Self {

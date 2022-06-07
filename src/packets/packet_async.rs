@@ -1,18 +1,27 @@
+use super::StaticProtocolMappings;
 use crate::types::VarInt;
 use crate::{Decodable, ProtocolVersion};
+use futures::future::BoxFuture;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
-use futures::future::BoxFuture;
 use tokio::sync::RwLock;
-use super::StaticProtocolMappings;
 
 pub struct NoContext;
 
 pub type LockedSheet<Context> = Arc<RwLock<ProtocolSheet<Context>>>;
 pub type LockedContext<Context> = Arc<RwLock<Context>>;
-pub type MetaHandle<Context> = fn(ProtocolVersion, LockedSheet<Context>, LockedContext<Context>, Cursor<Vec<u8>>) -> BoxFuture<'static, anyhow::Result<()>>;
-pub type PacketHandle<Context, PacketType> = fn(LockedSheet<Context>, LockedContext<Context>, PacketType) -> BoxFuture<'static, anyhow::Result<()>>;
+pub type MetaHandle<Context> = fn(
+    ProtocolVersion,
+    LockedSheet<Context>,
+    LockedContext<Context>,
+    Cursor<Vec<u8>>,
+) -> BoxFuture<'static, anyhow::Result<()>>;
+pub type PacketHandle<Context, PacketType> = fn(
+    LockedSheet<Context>,
+    LockedContext<Context>,
+    PacketType,
+) -> BoxFuture<'static, anyhow::Result<()>>;
 
 #[macro_export]
 macro_rules! wrap_async_packet_handle {
@@ -78,7 +87,7 @@ impl<Context: Send + Sync> ProtocolSheet<Context> {
         }
     }
 
-    fn register_generic<>(
+    fn register_generic(
         &mut self,
         protocol_mapping: (ProtocolVersion, VarInt),
         generic_handle: Arc<MetaHandle<Context>>,
@@ -98,12 +107,17 @@ impl<Context: Send + Sync> ProtocolSheet<Context> {
         if let Some(packet_handle) = generic_packet_handle {
             let arc_clone = Arc::clone(packet_handle);
             drop(self_read_lock);
-            (arc_clone)(protocol_version, Arc::clone(&self_lock), Arc::clone(&context), raw_buf).await
+            (arc_clone)(
+                protocol_version,
+                Arc::clone(&self_lock),
+                Arc::clone(&context),
+                raw_buf,
+            )
+            .await
         } else {
             Ok(())
         }
     }
-
 
     pub fn clear(&mut self) {
         self.mappings.clear();

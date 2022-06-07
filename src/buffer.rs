@@ -4,8 +4,8 @@ use bytes::{Buf, BufMut, BytesMut};
 use flate2::bufread::ZlibDecoder;
 use std::convert::TryInto;
 use std::io::{Cursor, Read};
-use tokio::net::tcp::OwnedReadHalf;
 use tokio::io::AsyncReadExt;
+use tokio::net::tcp::OwnedReadHalf;
 
 pub enum BufferState {
     Waiting,
@@ -32,12 +32,19 @@ impl MinecraftPacketBuffer {
         }
     }
 
-    pub async fn read_to_next_packet(&mut self, mut read: OwnedReadHalf) -> anyhow::Result<OwnedReadHalf> {
+    pub async fn read_to_next_packet(
+        &mut self,
+        mut read: OwnedReadHalf,
+    ) -> anyhow::Result<OwnedReadHalf> {
         loop {
             match self.poll() {
                 BufferState::PacketReady => return Ok(read),
-                BufferState::Waiting => { read.read_buf(self.inner_buf()).await?; }
-                BufferState::Error(error) => anyhow::bail!("Found error {} while polling buffer.", error),
+                BufferState::Waiting => {
+                    read.read_buf(self.inner_buf()).await?;
+                }
+                BufferState::Error(error) => {
+                    anyhow::bail!("Found error {} while polling buffer.", error)
+                }
             }
         }
     }
