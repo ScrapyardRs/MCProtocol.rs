@@ -56,7 +56,7 @@ macro_rules! wrap_async_packet_handle {
 }
 
 pub struct ProtocolSheet<Context: Send + Sync> {
-    protocol_version: ProtocolVersion,
+    pub protocol_version: ProtocolVersion,
     mappings: HashMap<(ProtocolVersion, VarInt), Arc<MetaHandle<Context>>>,
 }
 
