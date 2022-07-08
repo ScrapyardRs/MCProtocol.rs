@@ -1,22 +1,8 @@
-[package]
-name = "mc_protocol"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-aes = "0.8.1"
-anyhow = "1.0.56"
-bytes = "1.1.0"
-cfb8 = "0.8.1"
-flate2 = "1.0.23"
-futures = "0.3.21"
-hematite-nbt = "0.5.2"
-log = "0.4.16"
-typemap_rev = "0.1.5"
-uuid = "0.8.2"
-
-[dependencies.tokio]
-version = "1.18.2"
-features = ["sync", "net", "io-util"]
+[workspace]
+members = [
+    "mcprotocol_dev",
+    "minecraft_buffer",
+    "minecraft_registry",
+    "minecraft_serde",
+    "minecraft_serde_derive"
+]

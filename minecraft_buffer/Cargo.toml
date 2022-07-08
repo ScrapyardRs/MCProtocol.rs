@@ -1,0 +1,15 @@
+[package]
+name = "minecraft_buffer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.58"
+aes = "0.8.1"
+bytes = "1.1.0"
+cfb8 = "0.8.1"
+flate2 = "1.0.23"
+log = "0.4.17"
+minecraft_serde = { path = "../minecraft_serde", version = "0.1.0" }
+minecraft_registry = { path = "../minecraft_registry", version = "0.1.0" }
+tokio = { version = "1.19.2", features = ["io-std", "io-util", "time", "net"] }
