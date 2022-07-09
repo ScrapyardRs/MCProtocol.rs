@@ -100,7 +100,7 @@ macro_rules! packet_handlers {
             $context_ident:ident,
             $registry_ident:ident,
             $packet_ident:ident
-        ) -> anyhow::Result<()> {
+        ) {
             $($function_tokens:tt)*
         }
     )*) => {

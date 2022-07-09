@@ -95,7 +95,7 @@ struct HandshakeStateStore {
 }
 
 minecraft_registry::packet_handlers! {
-    fn handshake_handler<HandshakeMappings, HandshakeStateStore>(version_store, _registry, handshake) -> anyhow::Result<()> {
+    fn handshake_handler<HandshakeMappings, HandshakeStateStore>(version_store, _registry, handshake) {
         let mut x = version_store.write().await;
         x.state = Some(handshake);
     }

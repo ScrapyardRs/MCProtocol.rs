@@ -52,7 +52,7 @@ struct ClientContext {
 }
 
 packet_handlers! {
-    fn status_request_handler<RequestMappings, ClientContext>(context, _registry, _request) -> anyhow::Result<()> {
+    fn status_request_handler<RequestMappings, ClientContext>(context, _registry, _request) {
         write_locked! { |context => unlocked_context| {
             let mut client = &mut unlocked_context.client;
             let protocol = client.protocol_version;
@@ -81,7 +81,7 @@ packet_handlers! {
         }}
     }
 
-    fn ping_handler<PingMappings, ClientContext>(context, _registry, ping) -> anyhow::Result<()> {
+    fn ping_handler<PingMappings, ClientContext>(context, _registry, ping) {
         write_locked! { |context => unlocked_context| {
             let mut client = &mut unlocked_context.client;
             let pong = Pong {
