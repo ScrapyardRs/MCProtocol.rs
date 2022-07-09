@@ -117,14 +117,14 @@ fn expand_mc_serde_enum(input: &DeriveInput, data_enum: &DataEnum) -> TokenStrea
                 Ok(())
             }
         })
-            .to_tokens(&mut serializer_stream);
+        .to_tokens(&mut serializer_stream);
         (quote! {
             if key_value == #key {
                 #deserialize_stream
                 return Ok(#input_ident::#variant_ident #make_stream)
             }
         })
-            .to_tokens(&mut deserializer_stream);
+        .to_tokens(&mut deserializer_stream);
         (quote! {
             #input_ident::#variant_ident #raw_make_stream => {
                 let mut size = 0;
@@ -133,7 +133,7 @@ fn expand_mc_serde_enum(input: &DeriveInput, data_enum: &DataEnum) -> TokenStrea
                 Ok(size)
             }
         })
-            .to_tokens(&mut sizer_stream);
+        .to_tokens(&mut sizer_stream);
     }
 
     quote! {
@@ -180,8 +180,10 @@ fn field_deserializer_dynamic(fields: &Fields) -> TokenStream {
             let mut field_deserializer_stmts = Vec::new();
             for field in &named_fields.named {
                 let field_ident = field.ident.as_ref().unwrap();
-                let fake_field_ident =
-                    Ident::new(format!("{PREFIX}{}", field_ident).as_str(), Span::call_site());
+                let fake_field_ident = Ident::new(
+                    format!("{PREFIX}{}", field_ident).as_str(),
+                    Span::call_site(),
+                );
 
                 let der = quote!(let #fake_field_ident = anyhow::Context::context(minecraft_serde::serde::Deserialize::deserialize(reader), format!("Failure to write property: {}", stringify!(#fake_field_ident)))?;);
                 field_deserializer_stmts.push(der);
@@ -194,7 +196,8 @@ fn field_deserializer_dynamic(fields: &Fields) -> TokenStream {
         Fields::Unnamed(unnamed_fields) => {
             let mut field_deserializer_stmts = Vec::new();
             for (index, _) in unnamed_fields.unnamed.iter().enumerate() {
-                let field_ident = Ident::new(format!("{PREFIX}{}", index).as_str(), Span::call_site());
+                let field_ident =
+                    Ident::new(format!("{PREFIX}{}", index).as_str(), Span::call_site());
 
                 let der = quote!(let #field_ident = minecraft_serde::serde::Deserialize::deserialize(reader)?;);
                 field_deserializer_stmts.push(der);
@@ -214,8 +217,10 @@ fn make_statements<D: std::fmt::Display>(fields: &Fields, prefix: D) -> TokenStr
             let mut make_stmts = Vec::new();
             for field in &named_fields.named {
                 let field_ident = field.ident.as_ref().unwrap();
-                let fake_field_ident =
-                    Ident::new(format!("{}{field_ident}", prefix).as_str(), Span::call_site());
+                let fake_field_ident = Ident::new(
+                    format!("{}{field_ident}", prefix).as_str(),
+                    Span::call_site(),
+                );
 
                 let make = quote!(#field_ident: #fake_field_ident,);
                 make_stmts.push(make);
@@ -228,7 +233,8 @@ fn make_statements<D: std::fmt::Display>(fields: &Fields, prefix: D) -> TokenStr
         Fields::Unnamed(unnamed_fields) => {
             let mut make_stmts = Vec::new();
             for (index, _) in unnamed_fields.unnamed.iter().enumerate() {
-                let field_ident = Ident::new(format!("{PREFIX}{}", index).as_str(), Span::call_site());
+                let field_ident =
+                    Ident::new(format!("{PREFIX}{}", index).as_str(), Span::call_site());
                 let make = quote!(#field_ident,);
                 make_stmts.push(make);
             }
