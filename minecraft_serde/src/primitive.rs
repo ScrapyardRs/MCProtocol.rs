@@ -42,7 +42,7 @@ impl Serialize for bool {
     fn serialize<W: Write>(&self, writer: &mut W) -> SerdeResult<()> {
         writer
             .write(&[if *self { 0x01 } else { 0x00 }])
-            .map_err(|err| IoError(err))
+            .map_err(IoError)
             .map(|_| ())
     }
 
@@ -54,8 +54,8 @@ impl Serialize for bool {
 impl Deserialize for bool {
     fn deserialize<R: Read>(reader: &mut R) -> SerdeResult<Self> {
         let mut bytes = [0u8; 1];
-        reader.read_exact(&mut bytes).map_err(|err| IoError(err))?;
-        Ok(if bytes[0] == 0x0 { false } else { true })
+        reader.read_exact(&mut bytes).map_err(IoError)?;
+        Ok(bytes[0] != 0x0)
     }
 }
 
@@ -584,9 +584,9 @@ impl<T: McString> Deserialize for T {
         }
 
         let mut bytes = vec![0u8; *true_size as usize];
-        reader.read_exact(&mut bytes).map_err(|err| IoError(err))?;
+        reader.read_exact(&mut bytes).map_err(IoError)?;
         let internal = String::from_utf8(bytes)
-            .map_err(|_| Generic(format!("Failed to resolve utf8 from bytes.")))?;
+            .map_err(|_| Generic("Failed to resolve utf8 from bytes.".to_string()))?;
 
         Ok(T::new(internal))
     }
@@ -605,7 +605,7 @@ impl<T: McString> Serialize for T {
         }
 
         length.serialize(writer)?;
-        writer.write_all(bytes).map_err(|err| IoError(err))?;
+        writer.write_all(bytes).map_err(IoError)?;
 
         Ok(())
     }

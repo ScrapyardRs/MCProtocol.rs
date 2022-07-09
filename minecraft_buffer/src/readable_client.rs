@@ -183,7 +183,7 @@ impl Client {
             Client {
                 write_half,
                 packet_buffer,
-                protocol_version: ProtocolVersion::from(state.protocol_version.clone()),
+                protocol_version: ProtocolVersion::from(state.protocol_version),
                 compressor: None,
                 encryption: None,
             },

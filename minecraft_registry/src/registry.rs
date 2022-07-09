@@ -70,7 +70,7 @@ impl<Context> StateRegistry<Context> {
         let protocol_version = self_read_lock.protocol_version;
         let handler = self_read_lock.mappings.get(&packet_id);
         if let Some(handler) = handler {
-            let cloned_handler = Arc::clone(&handler);
+            let cloned_handler = Arc::clone(handler);
             drop(self_read_lock);
             (cloned_handler)(context, arc_self, protocol_version, packet_buffer).await?;
         }

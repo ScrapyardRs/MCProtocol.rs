@@ -38,14 +38,12 @@ pub enum ProtocolVersion {
 
 impl PartialOrd for ProtocolVersion {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let other_prot = other.to_spec().0;
-        let this_prot = self.to_spec().0;
-        if other_prot > this_prot {
-            Some(Ordering::Less)
-        } else if this_prot > other_prot {
-            Some(Ordering::Greater)
-        } else {
-            Some(Ordering::Equal)
+        let that_protocol = other.to_spec().0;
+        let this_protocol = self.to_spec().0;
+        match that_protocol {
+            x if this_protocol < x => Some(Ordering::Less),
+            x if this_protocol > x => Some(Ordering::Greater),
+            _ => Some(Ordering::Equal),
         }
     }
 }
@@ -64,7 +62,7 @@ impl ProtocolVersion {
 
 impl From<i32> for ProtocolVersion {
     fn from(val: i32) -> Self {
-        match val.into() {
+        match val {
             758 => ProtocolVersion::V118R2,
             _ => ProtocolVersion::Unknown,
         }
