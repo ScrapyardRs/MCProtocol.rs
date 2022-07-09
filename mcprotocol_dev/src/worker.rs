@@ -1,3 +1,10 @@
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+use serde_json::Value;
+use tokio::net::TcpStream;
+use tokio::sync::RwLock;
+
 use minecraft_buffer::readable_client::Client;
 use minecraft_buffer::write_to_client;
 use minecraft_registry::client_bound::status::{
@@ -8,43 +15,6 @@ use minecraft_registry::registry::{LockedContext, StateRegistry};
 use minecraft_registry::server_bound::handshaking::NextState;
 use minecraft_registry::server_bound::status::{PingMappings, RequestMappings};
 use minecraft_registry_derive::packet_handler;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::net::TcpStream;
-use tokio::sync::RwLock;
-
-#[derive(serde_derive::Serialize)]
-struct VersionStatusObject {
-    name: String,
-    protocol: i32,
-}
-
-#[derive(serde_derive::Serialize)]
-struct PlayerSampleStatusObject {
-    name: String,
-    id: String,
-}
-
-#[derive(serde_derive::Serialize)]
-struct PlayersStatusObject {
-    max: i32,
-    online: i32,
-    sample: Vec<PlayerSampleStatusObject>,
-}
-
-#[derive(serde_derive::Serialize)]
-struct DescriptionStatusObject {
-    text: String,
-}
-
-#[derive(serde_derive::Serialize)]
-struct StatusObject {
-    version: VersionStatusObject,
-    players: PlayersStatusObject,
-    description: DescriptionStatusObject,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    favicon: Option<String>,
-}
 
 struct ClientContext {
     client: Client,
@@ -56,26 +26,26 @@ fn status_request_handler(context: LockedContext<ClientContext>) {
     let mut unlocked = context.write().await;
     let mut client = &mut unlocked.client;
     let protocol = client.protocol_version;
-    let spec = protocol.to_spec();
+    let (protocol, name) = protocol.to_spec();
 
-    let response_object = StatusObject {
-        version: VersionStatusObject {
-            name: String::from(&spec.1),
-            protocol: spec.0,
-        },
-        players: PlayersStatusObject {
-            max: 1,
-            online: 0,
-            sample: Vec::new(),
-        },
-        description: DescriptionStatusObject {
-            text: String::from("Hello world!"),
-        },
-        favicon: None,
+    let json = serde_json::json! {
+        {
+            "version": {
+                "name": name,
+                "protocol": protocol
+            },
+            "players": {
+                "max": 1,
+                "online": 0,
+                "sample": []
+            },
+            "description": {
+                "text": "Hello World!"
+            }
+        }
     };
-
     let response = Response {
-        json_response: JSONResponse::from(serde_json::to_string(&response_object)?),
+        json_response: JSONResponse::from(json.to_string()),
     };
     write_to_client!(client, ResponseMappings, response);
 }
