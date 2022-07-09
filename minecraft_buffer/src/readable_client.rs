@@ -5,7 +5,7 @@ use bytes::Buf;
 use flate2::bufread::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
 use minecraft_registry::mappings::Mappings;
-use minecraft_registry::registry::StateRegistry;
+use minecraft_registry::registry::{LockedContext, StateRegistry};
 use minecraft_registry::server_bound::handshaking::{Handshake, HandshakeMappings, NextState};
 use minecraft_serde::primitive::VarInt;
 use minecraft_serde::serde::{ProtocolVersion, Serialize};
@@ -94,11 +94,10 @@ struct HandshakeStateStore {
     state: Option<Handshake>,
 }
 
-minecraft_registry::packet_handlers! {
-    fn handshake_handler<HandshakeMappings, HandshakeStateStore>(version_store, _registry, handshake) {
-        let mut x = version_store.write().await;
-        x.state = Some(handshake);
-    }
+#[minecraft_registry_derive::packet_handler(HandshakeStateStore, HandshakeMappings)]
+fn handshake_handler(state_store: LockedContext<HandshakeStateStore>, handshake: Handshake) {
+    let mut x = state_store.write().await;
+    x.state = Some(handshake);
 }
 
 pub struct Client {
