@@ -3,6 +3,7 @@ members = [
     "mcprotocol_dev",
     "minecraft_buffer",
     "minecraft_registry",
+    "minecraft_registry_derive",
     "minecraft_serde",
     "minecraft_serde_derive"
 ]

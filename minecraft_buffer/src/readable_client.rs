@@ -110,28 +110,6 @@ pub struct Client {
 }
 
 #[macro_export]
-macro_rules! read_locked {
-    (|$locked:ident => $unlocked:ident| {
-        $($function_tokens:tt)+
-    }) => {
-        let $unlocked = $locked.read().await;
-        $($function_tokens)+
-        drop($unlocked);
-    }
-}
-
-#[macro_export]
-macro_rules! write_locked {
-    (|$locked:ident => $unlocked:ident| {
-        $($function_tokens:tt)+
-    }) => {
-        let mut $unlocked = $locked.write().await;
-        $($function_tokens)+
-        drop($unlocked);
-    }
-}
-
-#[macro_export]
 macro_rules! write_to_client (($client:ident, $mappings:ty, $value:ident) => ($crate::readable_client::Client::send_packet::<$mappings>(&mut $client, $value).await?));
 
 impl Client {

@@ -1,13 +1,13 @@
 use minecraft_buffer::readable_client::Client;
-use minecraft_buffer::{write_locked, write_to_client};
+use minecraft_buffer::write_to_client;
 use minecraft_registry::client_bound::status::{
     JSONResponse, Pong, PongMappings, Response, ResponseMappings,
 };
 use minecraft_registry::mappings::Mappings;
-use minecraft_registry::packet_handlers;
 use minecraft_registry::registry::{LockedContext, StateRegistry};
 use minecraft_registry::server_bound::handshaking::NextState;
 use minecraft_registry::server_bound::status::{PingMappings, RequestMappings};
+use minecraft_registry_derive::packet_handler;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpStream;
@@ -51,46 +51,47 @@ struct ClientContext {
     continue_read: bool,
 }
 
-packet_handlers! {
-    fn status_request_handler<RequestMappings, ClientContext>(context, _registry, _request) {
-        write_locked! { |context => unlocked_context| {
-            let mut client = &mut unlocked_context.client;
-            let protocol = client.protocol_version;
-            let spec = protocol.to_spec();
+#[packet_handler(ClientContext, RequestMappings)]
+fn status_request_handler(context: LockedContext<ClientContext>) {
+    let mut unlocked = context.write().await;
+    let mut client = &mut unlocked.client;
+    let protocol = client.protocol_version;
+    let spec = protocol.to_spec();
 
-            let response_object = StatusObject {
-                version: VersionStatusObject {
-                    name: String::from(&spec.1),
-                    protocol: spec.0,
-                },
-                players: PlayersStatusObject {
-                    max: 1,
-                    online: 0,
-                    sample: Vec::new(),
-                },
-                description: DescriptionStatusObject {
-                    text: String::from("Hello world!"),
-                },
-                favicon: None,
-            };
+    let response_object = StatusObject {
+        version: VersionStatusObject {
+            name: String::from(&spec.1),
+            protocol: spec.0,
+        },
+        players: PlayersStatusObject {
+            max: 1,
+            online: 0,
+            sample: Vec::new(),
+        },
+        description: DescriptionStatusObject {
+            text: String::from("Hello world!"),
+        },
+        favicon: None,
+    };
 
-            let response = Response {
-                json_response: JSONResponse::from(serde_json::to_string(&response_object)?),
-            };
-            write_to_client!(client, ResponseMappings, response);
-        }}
-    }
+    let response = Response {
+        json_response: JSONResponse::from(serde_json::to_string(&response_object)?),
+    };
+    write_to_client!(client, ResponseMappings, response);
+}
 
-    fn ping_handler<PingMappings, ClientContext>(context, _registry, ping) {
-        write_locked! { |context => unlocked_context| {
-            let mut client = &mut unlocked_context.client;
-            let pong = Pong {
-                start_time: ping.start_time
-            };
-            write_to_client!(client, PongMappings, pong);
-            unlocked_context.continue_read = false;
-        }}
-    }
+#[packet_handler(ClientContext, PingMappings)]
+fn ping_handler(
+    context: LockedContext<ClientContext>,
+    packet: minecraft_registry::server_bound::status::Ping,
+) {
+    let mut unlocked = context.write().await;
+    let mut client = &mut unlocked.client;
+    let pong = Pong {
+        start_time: packet.start_time,
+    };
+    write_to_client!(client, PongMappings, pong);
+    unlocked.continue_read = false;
 }
 
 async fn forward_status_handler(
@@ -119,7 +120,7 @@ async fn forward_status_handler(
             Arc::clone(&locked_context),
             next_packet,
         )
-            .await?;
+        .await?;
     }
     Ok(())
 }
