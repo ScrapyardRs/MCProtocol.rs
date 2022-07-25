@@ -1,9 +1,11 @@
 [workspace]
 members = [
+    "encryption_utils",
     "mcprotocol_dev",
-    "minecraft_buffer",
-    "minecraft_registry",
-    "minecraft_registry_derive",
-    "minecraft_serde",
-    "minecraft_serde_derive"
+    "mc_buffer",
+    "mc_registry",
+    "mc_registry_derive",
+    "mc_serializer",
+    "mc_serializer_derive",
+    "impl/server"
 ]

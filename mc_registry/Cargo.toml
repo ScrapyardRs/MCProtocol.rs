@@ -1,0 +1,16 @@
+[package]
+name = "mc_registry"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.58"
+bytes = "1.1.0"
+futures = "0.3.21"
+mc_serializer = { path = "../mc_serializer", version = "0.1.0" }
+mc_serializer_derive = { path = "../mc_serializer_derive", version = "0.1.0" }
+tokio = { version = "1.19.2", features = ["sync", "net", "io-util"] }
+uuid = { version = "1.1.2", features = ["serde"] }
+encryption_utils = { path = "../encryption_utils", version = "0.1.0" }
+serde_derive = "1.0.138"
+serde = "1.0.138"
