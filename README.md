@@ -1,5 +1,3 @@
 # The Minecraft Spec
 
-Use at your own risk. Good luck. <br />
-No valid wiki or documentation will be built for this project. <br />
-This is for my personal use - feel free to borrow it.
+MCProtocol.rs aims to implement the entire Minecraft stack under a single base specification of the protocol, generically defining all Minecraft protocol as both client and server.
