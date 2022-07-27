@@ -45,8 +45,6 @@ pub type ProtocolVersionSpec = (i32, String);
 pub enum ProtocolVersion {
     Unknown,
     Handshake,
-    V118R1,
-    V118R2,
     V119R1,
 }
 
@@ -65,10 +63,8 @@ impl PartialOrd for ProtocolVersion {
 impl ProtocolVersion {
     pub fn to_spec(&self) -> ProtocolVersionSpec {
         match self {
-            ProtocolVersion::Unknown => (-1, "n/a".to_string()),
+            ProtocolVersion::Unknown => (99999, "n/a".to_string()), // treat unknown as latest
             ProtocolVersion::Handshake => (-1, "n/a".to_string()),
-            ProtocolVersion::V118R1 => (757, "1.18.1".to_string()),
-            ProtocolVersion::V118R2 => (758, "1.18.2".to_string()),
             ProtocolVersion::V119R1 => (759, "1.19.1".to_string()),
         }
     }
