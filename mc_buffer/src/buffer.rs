@@ -1,16 +1,16 @@
-use aes::cipher::BlockDecryptMut;
 use bytes::{Buf, BufMut, BytesMut};
-use minecraft_serde::primitive::VarInt;
+use mc_serializer::primitive::VarInt;
 use std::io::Cursor;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::net::tcp::OwnedReadHalf;
+use crate::encryption::Decrypt;
 
 pub struct MinecraftPacketBuffer {
     read_half: OwnedReadHalf,
     bytes: BytesMut,
     decoded: BytesMut,
-    decryption: Option<crate::encryption::Aes128Cfb8Dec>,
+    decryption: Option<Decrypt>,
 }
 
 const BUFFER_CAPACITY: usize = 2097154; // static value from wiki.vg
@@ -35,8 +35,8 @@ impl MinecraftPacketBuffer {
         (self.bytes.len(), self.decoded.len())
     }
 
-    pub fn enable_decryption(&mut self, codec: crate::encryption::Aes128Cfb8Dec) {
-        self.decryption = Some(codec);
+    pub fn enable_decryption(&mut self, codec: crate::encryption::Codec) {
+        self.decryption = Some(Decrypt::new(codec));
     }
 
     fn is_packet_available(&self) -> bool {
@@ -58,14 +58,14 @@ impl MinecraftPacketBuffer {
             Duration::from_secs(10),
             self.read_half.read_buf(&mut self.bytes),
         )
-        .await
+            .await
         {
             Ok(result) => result?,
             Err(_) => {
                 return Ok(BufferState::Error(String::from("Client read timeout.")));
             }
         }
-        .min(self.decoded.capacity() - self.decoded.len());
+            .min(self.decoded.capacity() - self.decoded.len());
 
         if size_read == 0 {
             return Ok(if self.is_packet_available() {
@@ -87,7 +87,7 @@ impl MinecraftPacketBuffer {
         let read_half = self.bytes.chunks_mut(size_read).next().unwrap();
 
         if let Some(decryption) = &mut self.decryption {
-            decryption.decrypt_block_mut(read_half.into());
+            decryption.decrypt(read_half.into());
         }
 
         self.decoded.put_slice(read_half);
