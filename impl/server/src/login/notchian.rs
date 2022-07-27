@@ -1,16 +1,16 @@
-use std::future::Future;
-use std::ops::BitAnd;
+
+
 use std::sync::Arc;
 use rand::RngCore;
 use encryption_utils::{MCPrivateKey, private_key_to_der};
 use mc_registry::client_bound::login::{Disconnect, EncryptionRequest, LoginSuccess, ServerId, SetCompression};
 use mc_registry::mappings::Mappings;
 use mc_registry::registry::{arc_lock, LockedContext, StateRegistry, StateRegistryHandle};
-use mc_registry::server_bound::login::{EncryptionResponse, EncryptionResponseData, LoginPluginResponse, LoginStart};
-use mc_registry::shared_types::login::{MCIdentifiedKey, LoginUsername, IdentifiedKey};
+use mc_registry::server_bound::login::{EncryptionResponse, EncryptionResponseData, LoginStart};
+use mc_registry::shared_types::login::{LoginUsername, IdentifiedKey};
 use mc_serializer::primitive::{Chat, VarInt};
 use crate::client_connection::Connection;
-use crate::login::AuthenticatedPlayerConnection;
+
 use num_bigint::BigInt;
 use reqwest::StatusCode;
 use serde_json::json;
@@ -54,10 +54,8 @@ fn login_start_handler(context: LockedContext<LoginContext>, packet: LoginStart)
         signature.verify_signature(&encryption_utils::key_from_der(MOJANG_KEY)?)?;
 
         context_write.player_key = Some(IdentifiedKey::new(&signature.public_key.1)?);
-    } else {
-        if context_write.config.force_key_authentication {
-            anyhow::bail!("Player key was expected but not found.");
-        }
+    } else if context_write.config.force_key_authentication {
+        anyhow::bail!("Player key was expected but not found.");
     }
 }
 
@@ -89,7 +87,7 @@ fn encryption_response_handler(context: LockedContext<LoginContext>, packet: Enc
                 message_signature: (_, signature)
             } => {
                 use sha2::Digest;
-                let mut message = verify.clone();
+                let message = verify.clone();
 
                 let mut hasher = sha2::Sha256::new();
                 hasher.update(&message);
@@ -150,12 +148,12 @@ fn encryption_response_handler(context: LockedContext<LoginContext>, packet: Enc
 }
 
 async fn handle_packet_failure(connection: &mut Connection, packet_handler: anyhow::Result<()>) -> anyhow::Result<bool> {
-    return Ok(if let Err(error) = packet_handler {
+    Ok(if let Err(error) = packet_handler {
         disconnect(connection, format!("Failure during loging sequence. {:?}", error)).await?;
         true
     } else {
         false
-    });
+    })
 }
 
 pub struct NotchianLoginConfig {
@@ -243,7 +241,7 @@ pub async fn handle_login(connection: &mut Connection, config: NotchianLoginConf
         let context_read = context.read().await;
 
         if let Some(secret) = context_read.shared_secret.as_ref() {
-            let encryption_split = mc_buffer::encryption::Codec::new(&secret)?;
+            let encryption_split = mc_buffer::encryption::Codec::new(secret)?;
             connection.enable_crypt(encryption_split);
         }
 
@@ -254,20 +252,20 @@ pub async fn handle_login(connection: &mut Connection, config: NotchianLoginConf
     let context_read = context.read().await;
 
     let secret = context_read.shared_secret.as_ref().unwrap();
-    let encryption_split = mc_buffer::encryption::Codec::new(&secret)?;
+    let encryption_split = mc_buffer::encryption::Codec::new(secret)?;
 
     connection.enable_crypt(encryption_split);
 
     if context_read.config.compression_threshold > 0 {
         connection.send_packet(SetCompression {
-            threshold: VarInt::from(context_read.config.compression_threshold)
+            threshold: context_read.config.compression_threshold
         }).await?;
     }
 
     let game_profile = context_read.game_profile.as_ref().map(Clone::clone).unwrap();
 
     let login_success = LoginSuccess {
-        uuid: game_profile.id.clone(),
+        uuid: game_profile.id,
         username: LoginUsername::from(game_profile.name.to_string()),
         properties: (
             VarInt::try_from(game_profile.properties.len())?,
@@ -275,7 +273,7 @@ pub async fn handle_login(connection: &mut Connection, config: NotchianLoginConf
         ),
     };
 
-    let player_key = context_read.player_key.as_ref().map(|x| x.clone());
+    let player_key = context_read.player_key.as_ref().cloned();
 
     connection.send_packet(login_success).await?;
 

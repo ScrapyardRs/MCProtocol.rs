@@ -87,7 +87,7 @@ impl MinecraftPacketBuffer {
         let read_half = self.bytes.chunks_mut(size_read).next().unwrap();
 
         if let Some(decryption) = &mut self.decryption {
-            decryption.decrypt(read_half.into());
+            decryption.decrypt(read_half);
         }
 
         self.decoded.put_slice(read_half);

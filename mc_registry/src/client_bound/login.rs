@@ -1,5 +1,5 @@
 use mc_serializer::primitive::{Chat, Identifier, VarInt};
-use mc_serializer::ext;
+
 use crate::shared_types::login::LoginUsername;
 use crate::shared_types::Property;
 

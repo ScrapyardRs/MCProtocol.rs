@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.58"
 data-encoding = "2.3.2"
-gnir = "0.16.5"
 openssl = "0.10.41"
 rand = "0.8.5"
 rsa = "0.5"

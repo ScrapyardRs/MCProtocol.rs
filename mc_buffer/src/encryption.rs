@@ -1,7 +1,7 @@
 use std::io::{Cursor, Read};
 
 use aes::Aes128;
-use aes::cipher::{BlockDecryptMut, BlockEncryptMut};
+
 use cfb8::Cfb8;
 use cfb8::cipher::{AsyncStreamCipher, NewCipher};
 use flate2::bufread::{ZlibDecoder, ZlibEncoder};

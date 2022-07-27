@@ -85,7 +85,7 @@ pub fn packet_handler(
                     .collect::<proc_macro::TokenStream>().into();
             let mapping_tokens =
                 attribute_iter
-                    .clone()
+                    
                     .skip_while(|item| match item {
                         proc_macro::TokenTree::Punct(punc) => punc.as_char() != ',',
                         _ => true,

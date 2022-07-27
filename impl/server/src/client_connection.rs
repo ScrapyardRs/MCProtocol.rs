@@ -27,7 +27,7 @@ pub struct Connection {
 
 impl Connection {
     pub fn socket_address(&self) -> SocketAddr {
-        self.socket_address.clone()
+        self.socket_address
     }
 
     pub fn connection_into(&self) -> &InitialConnectionInfo {

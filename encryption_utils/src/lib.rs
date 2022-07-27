@@ -1,18 +1,12 @@
 use rsa::hash::Hash;
-use data_encoding::{BASE64_MIME, Specification};
-use openssl::sha::{sha1, sha256};
+use data_encoding::{Specification};
+use openssl::sha::{sha1};
 use rand::rngs::OsRng;
-use ring::error::{KeyRejected, Unspecified};
-use ring::signature::{UnparsedPublicKey, RSA_PKCS1_SHA256, RSA_PKCS1_2048_8192_SHA256, RsaKeyPair, VerificationAlgorithm};
-use rsa::{BigUint, hash, PaddingScheme, PublicKey, PublicKeyParts, RsaPublicKey};
-use rsa::errors::Error;
-use rsa::PaddingScheme::PKCS1v15Encrypt;
-use rsa::pkcs1::ToRsaPrivateKey;
-use rsa::pkcs8::ToPublicKey;
-use rsa_der::public_key_from_der;
+
+use rsa::{BigUint, PaddingScheme, PublicKey, PublicKeyParts, RsaPublicKey};
 
 pub type MCPrivateKey = rsa::RsaPrivateKey;
-pub type MCPublicKey = rsa::RsaPublicKey;
+pub type MCPublicKey = RsaPublicKey;
 pub type Padding = PaddingScheme;
 
 pub const SHA1_HASH: Hash = Hash::SHA1;
@@ -44,7 +38,7 @@ pub fn encode_key_pem(expiry: u64, public_key: &[u8]) -> anyhow::Result<String> 
     spec.symbols.push_str("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
     spec.padding = Some('=');
     spec.wrap.width = 76;
-    spec.wrap.separator.push_str("\n");
+    spec.wrap.separator.push('\n');
     let spec = spec.encoding()?;
 
     Ok(format!("{}-----BEGIN RSA PUBLIC KEY-----\n{}-----END RSA PUBLIC KEY-----\n", expiry, spec.encode(public_key)))

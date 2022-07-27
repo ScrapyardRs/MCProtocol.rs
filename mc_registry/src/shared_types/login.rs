@@ -1,6 +1,6 @@
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use encryption_utils::{key_from_der, MCPrivateKey, MCPublicKey, sha1_message};
+use encryption_utils::{key_from_der, MCPublicKey, sha1_message};
 use mc_serializer::primitive::VarInt;
 
 mc_serializer::auto_string!(LoginUsername, 16);

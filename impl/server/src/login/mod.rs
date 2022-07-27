@@ -1,6 +1,6 @@
 use mc_registry::shared_types::GameProfile;
-use mc_registry::shared_types::login::{IdentifiedKey, LoginUsername, MCIdentifiedKey};
-use mc_serializer::serde::ProtocolVersion;
+use mc_registry::shared_types::login::{IdentifiedKey};
+
 
 use crate::client_connection::Connection;
 use crate::login::notchian::NotchianLoginConfig;
