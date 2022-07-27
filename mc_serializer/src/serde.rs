@@ -73,7 +73,6 @@ impl ProtocolVersion {
 impl From<i32> for ProtocolVersion {
     fn from(val: i32) -> Self {
         match val {
-            758 => ProtocolVersion::V118R2,
             759 => ProtocolVersion::V119R1,
             _ => ProtocolVersion::Unknown,
         }
