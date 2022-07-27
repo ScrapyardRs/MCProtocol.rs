@@ -19,11 +19,11 @@ impl AuthenticatedPlayerConnection {
             None => anyhow::bail!("Attempted to send signature without player key."),
             Some(key) => {
                 use sha2::Digest;
-                let mut sha = sha2::Sha256::new();
+                let mut hasher = sha2::Sha256::new();
                 for message_part in message {
-                    sha.update(message_part);
+                    hasher.update(message_part);
                 }
-                let hasher = sha.finalize();
+                let hasher = hasher.finalize();
                 let bytes = hasher.as_slice();
                 key.verify_data_signature(signature, bytes)?;
                 Ok(())
