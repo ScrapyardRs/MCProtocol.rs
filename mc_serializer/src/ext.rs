@@ -1,7 +1,7 @@
-use std::io::{Cursor, Read, Write};
 use crate::primitive::VarInt;
 use crate::serde::{Deserialize, SerdeResult, Serialize};
 use bytes::Buf;
+use std::io::{Cursor, Read, Write};
 
 impl<T: Serialize> Serialize for (VarInt, Vec<T>) {
     fn serialize<W: Write>(&self, writer: &mut W) -> SerdeResult<()> {
@@ -66,7 +66,12 @@ impl<T: Serialize> Serialize for (bool, Option<T>) {
     fn serialize<W: Write>(&self, writer: &mut W) -> SerdeResult<()> {
         bool::serialize(&self.0, writer)?;
         if self.0 {
-            T::serialize(self.1.as_ref().expect("When bool is true option should have Some(x)."), writer)?;
+            T::serialize(
+                self.1
+                    .as_ref()
+                    .expect("When bool is true option should have Some(x)."),
+                writer,
+            )?;
         }
         Ok(())
     }
@@ -79,7 +84,7 @@ impl<T: Serialize> Serialize for (bool, Option<T>) {
     }
 }
 
-impl <T: Deserialize> Deserialize for (bool, Option<T>) {
+impl<T: Deserialize> Deserialize for (bool, Option<T>) {
     fn deserialize<R: Read>(reader: &mut R) -> SerdeResult<Self> {
         let exists = bool::deserialize(reader)?;
         if exists {
@@ -104,7 +109,11 @@ impl Serialize for uuid::Uuid {
 
 impl Deserialize for uuid::Uuid {
     fn deserialize<R: Read>(reader: &mut R) -> SerdeResult<Self> {
-        let (most_significant, least_significant) = (u64::deserialize(reader)?, u64::deserialize(reader)?);
-        Ok(uuid::Uuid::from_u64_pair(most_significant, least_significant))
+        let (most_significant, least_significant) =
+            (u64::deserialize(reader)?, u64::deserialize(reader)?);
+        Ok(uuid::Uuid::from_u64_pair(
+            most_significant,
+            least_significant,
+        ))
     }
 }

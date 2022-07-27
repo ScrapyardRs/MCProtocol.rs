@@ -1,9 +1,4 @@
-use std::io::Cursor;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
-use tokio::net::tcp::OwnedWriteHalf;
-use tokio::net::TcpStream;
+use crate::client_status_handler::StatusPart;
 use bytes::Buf;
 use encryption_utils::MCPrivateKey;
 use mc_buffer::buffer::MinecraftPacketBuffer;
@@ -13,7 +8,12 @@ use mc_registry::registry::{arc_lock, LockedContext, StateRegistry, StateRegistr
 use mc_registry::server_bound::handshaking::{Handshake, NextState, ServerAddress};
 use mc_serializer::primitive::VarInt;
 use mc_serializer::serde::ProtocolVersion;
-use crate::client_status_handler::StatusPart;
+use std::io::Cursor;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
+use tokio::net::tcp::OwnedWriteHalf;
+use tokio::net::TcpStream;
 
 pub struct Connection {
     server_key: Arc<MCPrivateKey>,
@@ -34,7 +34,9 @@ impl Connection {
         &self.connection_info
     }
 
-    pub fn server_key(&self) -> Arc<MCPrivateKey> { Arc::clone(&self.server_key) }
+    pub fn server_key(&self) -> Arc<MCPrivateKey> {
+        Arc::clone(&self.server_key)
+    }
 }
 
 #[derive(Default, Debug)]
@@ -80,7 +82,10 @@ fn handle_handshake(context: LockedContext<ConnectionPart>, packet: Handshake) {
 }
 
 impl Connection {
-    pub async fn send_packet<Packet: Mappings<PacketType=Packet>>(&mut self, packet: Packet) -> anyhow::Result<()> {
+    pub async fn send_packet<Packet: Mappings<PacketType = Packet>>(
+        &mut self,
+        packet: Packet,
+    ) -> anyhow::Result<()> {
         let buffer = Packet::create_packet_buffer(self.connection_info.protocol_version, packet)?;
 
         let mut buffer = if let Some(compressor) = self.compressor.as_ref() {
@@ -123,11 +128,18 @@ impl Connection {
         self.compressor = Some(Compressor::new(threshold));
     }
 
-    pub async fn handle_status_with_data<SPB: Into<StatusPart>>(self, spb: SPB) -> anyhow::Result<()> {
+    pub async fn handle_status_with_data<SPB: Into<StatusPart>>(
+        self,
+        spb: SPB,
+    ) -> anyhow::Result<()> {
         crate::client_status_handler::handle_status(self, spb).await
     }
 
-    pub async fn from_initial_connection(socket_address: SocketAddr, stream: TcpStream, server_key: Arc<MCPrivateKey>) -> anyhow::Result<Connection> {
+    pub async fn from_initial_connection(
+        socket_address: SocketAddr,
+        stream: TcpStream,
+        server_key: Arc<MCPrivateKey>,
+    ) -> anyhow::Result<Connection> {
         let (read_half, write_half) = stream.into_split();
         let mut packet_buffer = MinecraftPacketBuffer::new(read_half);
 
@@ -147,7 +159,8 @@ impl Connection {
             registry_lock,
             Arc::clone(&context_lock),
             Cursor::new(packet_buffer.loop_read().await?),
-        ).await?;
+        )
+        .await?;
 
         let context_read = context_lock.read().await;
 
@@ -161,16 +174,14 @@ impl Connection {
             virtual_port: context_read.virtual_port.unwrap(),
         };
 
-        Ok(
-            Connection {
-                server_key,
-                socket_address,
-                connection_info: state,
-                write_half,
-                packet_buffer,
-                compressor: None,
-                encryption: None,
-            },
-        )
+        Ok(Connection {
+            server_key,
+            socket_address,
+            connection_info: state,
+            write_half,
+            packet_buffer,
+            compressor: None,
+            encryption: None,
+        })
     }
 }

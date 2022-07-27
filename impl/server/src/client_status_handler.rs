@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use crate::client_connection::Connection;
 use mc_registry::client_bound::status::{JSONResponse, Pong, Response};
 use mc_registry::mappings::Mappings;
 use mc_registry::registry::{arc_lock, LockedContext, StateRegistry};
 use mc_registry::server_bound::status::{Ping, Request};
 use mc_serializer::serde::ProtocolVersionSpec;
-use crate::client_connection::Connection;
+use std::sync::Arc;
 
 #[derive(serde_derive::Serialize, Clone)]
 pub struct PlayerSample {
@@ -109,9 +109,7 @@ impl From<(ProtocolVersionSpec, StatusPart)> for StatusResponseJson {
                 online: part.total_online,
                 sample: part.player_sample,
             },
-            description: DescriptionInfo {
-                text: part.motd,
-            },
+            description: DescriptionInfo { text: part.motd },
             favicon: part.favicon,
             previews_chat: false, // todo handle this when true
         }
@@ -129,11 +127,14 @@ fn handle_status_request(context: LockedContext<StatusClientContext>) {
     let context_read = context.read().await;
     let response = &context_read.status_info;
     let packet_response = Response {
-        json_response: JSONResponse::from(serde_json::to_string(response)?)
+        json_response: JSONResponse::from(serde_json::to_string(response)?),
     };
     drop(context_read);
     let mut context_write = context.write().await;
-    context_write.connection.send_packet(packet_response).await?;
+    context_write
+        .connection
+        .send_packet(packet_response)
+        .await?;
 }
 
 #[mc_registry_derive::packet_handler]
@@ -144,13 +145,20 @@ fn handle_ping(packet: Ping, context: LockedContext<StatusClientContext>) {
     context_write.complete = true;
 }
 
-pub async fn handle_status<SPB: Into<StatusPart>>(connection: Connection, part_builder: SPB) -> anyhow::Result<()> {
+pub async fn handle_status<SPB: Into<StatusPart>>(
+    connection: Connection,
+    part_builder: SPB,
+) -> anyhow::Result<()> {
     let mut registry = StateRegistry::new(connection.connection_into().protocol_version());
     Request::attach_to_register(&mut registry, handle_status_request);
     Ping::attach_to_register(&mut registry, handle_ping);
     let registry = arc_lock(registry);
 
-    let status_info = (connection.connection_into().protocol_version().to_spec(), part_builder.into()).into();
+    let status_info = (
+        connection.connection_into().protocol_version().to_spec(),
+        part_builder.into(),
+    )
+        .into();
     let context = arc_lock(StatusClientContext {
         connection,
         status_info,

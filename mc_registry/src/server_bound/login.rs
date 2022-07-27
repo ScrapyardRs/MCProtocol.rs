@@ -1,5 +1,5 @@
+use crate::shared_types::login::{LoginUsername, MCIdentifiedKey};
 use mc_serializer::primitive::VarInt;
-use crate::shared_types::login::{MCIdentifiedKey, LoginUsername};
 
 #[derive(mc_serializer_derive::MCSerde, Debug)]
 pub struct LoginStart {

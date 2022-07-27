@@ -18,10 +18,7 @@ pub type StateRegistryHandle<Context> = fn(
     ProtocolVersion,
     Cursor<Vec<u8>>,
 ) -> BoxedFuture;
-pub type FailureHandle<Context> = fn(
-    LockedContext<Context>,
-    VarInt,
-) -> BoxedFuture;
+pub type FailureHandle<Context> = fn(LockedContext<Context>, VarInt) -> BoxedFuture;
 
 pub fn arc_lock<T>(object: T) -> ArcLocked<T> {
     Arc::new(RwLock::new(object))

@@ -2,8 +2,8 @@ use std::io::{Cursor, Read};
 
 use aes::Aes128;
 
-use cfb8::Cfb8;
 use cfb8::cipher::{AsyncStreamCipher, NewCipher};
+use cfb8::Cfb8;
 use flate2::bufread::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
 

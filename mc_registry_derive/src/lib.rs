@@ -72,31 +72,37 @@ pub fn packet_handler(
 
     let (context_tokens, mappings_tokens) = match (context_tokens_guard, mappings_tokens_guard) {
         (Some(context_tokens), Some(mappings_tokens)) => (context_tokens, mappings_tokens),
-        (Some(context_tokens), None) => (context_tokens, attribute_iter.collect::<proc_macro::TokenStream>().into()),
-        (None, Some(mappings_tokens)) => (attribute_iter.collect::<proc_macro::TokenStream>().into(), mappings_tokens),
+        (Some(context_tokens), None) => (
+            context_tokens,
+            attribute_iter.collect::<proc_macro::TokenStream>().into(),
+        ),
+        (None, Some(mappings_tokens)) => (
+            attribute_iter.collect::<proc_macro::TokenStream>().into(),
+            mappings_tokens,
+        ),
         (None, None) => {
-            let context_tokens =
-                attribute_iter
-                    .clone()
-                    .take_while(|item| match item {
-                        proc_macro::TokenTree::Punct(punc) => punc.as_char() != ',',
-                        _ => true,
-                    })
-                    .collect::<proc_macro::TokenStream>().into();
-            let mapping_tokens =
-                attribute_iter
-                    
-                    .skip_while(|item| match item {
-                        proc_macro::TokenTree::Punct(punc) => punc.as_char() != ',',
-                        _ => true,
-                    })
-                    .skip(1)
-                    .collect::<proc_macro::TokenStream>().into();
+            let context_tokens = attribute_iter
+                .clone()
+                .take_while(|item| match item {
+                    proc_macro::TokenTree::Punct(punc) => punc.as_char() != ',',
+                    _ => true,
+                })
+                .collect::<proc_macro::TokenStream>()
+                .into();
+            let mapping_tokens = attribute_iter
+                .skip_while(|item| match item {
+                    proc_macro::TokenTree::Punct(punc) => punc.as_char() != ',',
+                    _ => true,
+                })
+                .skip(1)
+                .collect::<proc_macro::TokenStream>()
+                .into();
             (context_tokens, mapping_tokens)
         }
     };
 
-    let full_context_tokens = full_context_tokens_guard.unwrap_or(quote::quote!(mc_registry::registry::LockedContext<#context_tokens>));
+    let full_context_tokens = full_context_tokens_guard
+        .unwrap_or(quote::quote!(mc_registry::registry::LockedContext<#context_tokens>));
 
     proc_macro::TokenStream::from(quote::quote! {
         fn #fn_name(

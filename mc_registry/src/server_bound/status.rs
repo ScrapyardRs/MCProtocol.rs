@@ -10,7 +10,9 @@ pub struct Ping {
 
 impl From<Pong> for Ping {
     fn from(pong: Pong) -> Self {
-        Self { start_time: pong.start_time }
+        Self {
+            start_time: pong.start_time,
+        }
     }
 }
 

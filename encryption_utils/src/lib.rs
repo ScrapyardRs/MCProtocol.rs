@@ -1,7 +1,7 @@
-use rsa::hash::Hash;
-use data_encoding::{Specification};
-use openssl::sha::{sha1};
+use data_encoding::Specification;
+use openssl::sha::sha1;
 use rand::rngs::OsRng;
+use rsa::hash::Hash;
 
 use rsa::{BigUint, PaddingScheme, PublicKey, PublicKeyParts, RsaPublicKey};
 
@@ -27,24 +27,31 @@ pub fn key_from_der(der: &[u8]) -> anyhow::Result<MCPublicKey> {
 pub fn private_key_to_der(key: &MCPrivateKey) -> Vec<u8> {
     let pub_key = RsaPublicKey::from(key);
 
-    rsa_der::public_key_to_der(
-        &pub_key.n().to_bytes_be(),
-        &pub_key.e().to_bytes_be(),
-    )
+    rsa_der::public_key_to_der(&pub_key.n().to_bytes_be(), &pub_key.e().to_bytes_be())
 }
 
 pub fn encode_key_pem(expiry: u64, public_key: &[u8]) -> anyhow::Result<String> {
     let mut spec = Specification::new();
-    spec.symbols.push_str("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
+    spec.symbols
+        .push_str("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
     spec.padding = Some('=');
     spec.wrap.width = 76;
     spec.wrap.separator.push('\n');
     let spec = spec.encoding()?;
 
-    Ok(format!("{}-----BEGIN RSA PUBLIC KEY-----\n{}-----END RSA PUBLIC KEY-----\n", expiry, spec.encode(public_key)))
+    Ok(format!(
+        "{}-----BEGIN RSA PUBLIC KEY-----\n{}-----END RSA PUBLIC KEY-----\n",
+        expiry,
+        spec.encode(public_key)
+    ))
 }
 
-pub fn verify_signature(hash: Option<Hash>, verify_key: &MCPublicKey, signature: &[u8], message: &[u8]) -> anyhow::Result<()> {
+pub fn verify_signature(
+    hash: Option<Hash>,
+    verify_key: &MCPublicKey,
+    signature: &[u8],
+    message: &[u8],
+) -> anyhow::Result<()> {
     verify_key.verify(PaddingScheme::PKCS1v15Sign { hash }, message, signature)?;
     Ok(())
 }

@@ -13,7 +13,9 @@ pub struct Pong {
 
 impl From<Ping> for Pong {
     fn from(ping: Ping) -> Self {
-        Self { start_time: ping.start_time }
+        Self {
+            start_time: ping.start_time,
+        }
     }
 }
 

@@ -1,20 +1,20 @@
-
-
-use std::sync::Arc;
-use rand::RngCore;
-use encryption_utils::{MCPrivateKey, private_key_to_der};
-use mc_registry::client_bound::login::{Disconnect, EncryptionRequest, LoginSuccess, ServerId, SetCompression};
+use crate::client_connection::Connection;
+use encryption_utils::{private_key_to_der, MCPrivateKey};
+use mc_registry::client_bound::login::{
+    Disconnect, EncryptionRequest, LoginSuccess, ServerId, SetCompression,
+};
 use mc_registry::mappings::Mappings;
 use mc_registry::registry::{arc_lock, LockedContext, StateRegistry, StateRegistryHandle};
 use mc_registry::server_bound::login::{EncryptionResponse, EncryptionResponseData, LoginStart};
-use mc_registry::shared_types::login::{LoginUsername, IdentifiedKey};
+use mc_registry::shared_types::login::{IdentifiedKey, LoginUsername};
 use mc_serializer::primitive::{Chat, VarInt};
-use crate::client_connection::Connection;
+use rand::RngCore;
+use std::sync::Arc;
 
+use mc_registry::shared_types::GameProfile;
 use num_bigint::BigInt;
 use reqwest::StatusCode;
 use serde_json::json;
-use mc_registry::shared_types::GameProfile;
 
 const MOJANG_KEY: &[u8] = include_bytes!("yggdrasil_session_pubkey.der");
 
@@ -30,13 +30,18 @@ struct LoginContext {
 
 async fn disconnect<S: Into<String>>(connection: &mut Connection, reason: S) -> anyhow::Result<()> {
     let into = reason.into();
-    connection.send_packet(Disconnect {
-        reason: Chat::from(json! {
-        {
-            "text": into
-        }
-    }.to_string())
-    }).await?;
+    connection
+        .send_packet(Disconnect {
+            reason: Chat::from(
+                json! {
+                    {
+                        "text": into
+                    }
+                }
+                .to_string(),
+            ),
+        })
+        .await?;
     Ok(())
 }
 
@@ -46,7 +51,10 @@ fn login_start_handler(context: LockedContext<LoginContext>, packet: LoginStart)
     context_write.username = Some(packet.name.clone());
 
     if packet.sig_data.0 {
-        let signature = packet.sig_data.1.expect("Signature data expected but not found.");
+        let signature = packet
+            .sig_data
+            .1
+            .expect("Signature data expected but not found.");
         if signature.has_expired() {
             anyhow::bail!("Player key was found but expired.");
         }
@@ -76,15 +84,20 @@ fn digest(bytes: &[u8]) -> String {
 #[mc_registry_derive::packet_handler]
 fn encryption_response_handler(context: LockedContext<LoginContext>, packet: EncryptionResponse) {
     let mut context_write = context.write().await;
-    let verify = context_write.player_verify.as_ref().expect("Verify tokens not found but were expected.");
+    let verify = context_write
+        .player_verify
+        .as_ref()
+        .expect("Verify tokens not found but were expected.");
     let player_key = &context_write.player_key;
     let server_key = &context_write.server_key;
     if let Some(player_key) = player_key {
         match packet.response_data {
-            EncryptionResponseData::VerifyTokenData(_) => anyhow::bail!("Salt not found but expected."),
+            EncryptionResponseData::VerifyTokenData(_) => {
+                anyhow::bail!("Salt not found but expected.")
+            }
             EncryptionResponseData::MessageSignature {
                 salt,
-                message_signature: (_, signature)
+                message_signature: (_, signature),
             } => {
                 use sha2::Digest;
                 let message = verify.clone();
@@ -109,16 +122,22 @@ fn encryption_response_handler(context: LockedContext<LoginContext>, packet: Enc
     } else {
         match packet.response_data {
             EncryptionResponseData::VerifyTokenData((_, data)) => {
-                let response = server_key.decrypt(encryption_utils::Padding::PKCS1v15Encrypt, &data)?;
+                let response =
+                    server_key.decrypt(encryption_utils::Padding::PKCS1v15Encrypt, &data)?;
                 if verify.ne(&response) {
                     anyhow::bail!("Verification mismatch.");
                 }
             }
-            EncryptionResponseData::MessageSignature { .. } => anyhow::bail!("Salt found while player key is not."),
+            EncryptionResponseData::MessageSignature { .. } => {
+                anyhow::bail!("Salt found while player key is not.")
+            }
         }
     }
 
-    let shared_secret = server_key.decrypt(encryption_utils::Padding::PKCS1v15Encrypt, &packet.shared_secret.1)?;
+    let shared_secret = server_key.decrypt(
+        encryption_utils::Padding::PKCS1v15Encrypt,
+        &packet.shared_secret.1,
+    )?;
 
     let generated_server_id = hash_server_id("", &shared_secret, &private_key_to_der(server_key));
 
@@ -139,7 +158,10 @@ fn encryption_response_handler(context: LockedContext<LoginContext>, packet: Enc
     if response.status() == StatusCode::from_u16(204)? {
         anyhow::bail!("Failed to authenticate with mojang.");
     } else if response.status() != StatusCode::from_u16(200)? {
-        anyhow::bail!("Received a {} status code from mojang auth server.", response.status().as_u16());
+        anyhow::bail!(
+            "Received a {} status code from mojang auth server.",
+            response.status().as_u16()
+        );
     }
 
     let game_profile = response.json::<GameProfile>().await?;
@@ -147,21 +169,32 @@ fn encryption_response_handler(context: LockedContext<LoginContext>, packet: Enc
     context_write.shared_secret = Some(shared_secret);
 }
 
-async fn handle_packet_failure(connection: &mut Connection, packet_handler: anyhow::Result<()>) -> anyhow::Result<bool> {
+async fn handle_packet_failure(
+    connection: &mut Connection,
+    packet_handler: anyhow::Result<()>,
+) -> anyhow::Result<bool> {
     Ok(if let Err(error) = packet_handler {
-        disconnect(connection, format!("Failure during loging sequence. {:?}", error)).await?;
+        disconnect(
+            connection,
+            format!("Failure during loging sequence. {:?}", error),
+        )
+        .await?;
         true
     } else {
         false
     })
 }
 
+#[derive(Copy, Clone)]
 pub struct NotchianLoginConfig {
     pub force_key_authentication: bool,
     pub compression_threshold: VarInt,
 }
 
-pub async fn wrapped_handle_login(connection: &mut Connection, config: NotchianLoginConfig) -> Option<(GameProfile, Option<IdentifiedKey>)> {
+pub async fn wrapped_handle_login(
+    connection: &mut Connection,
+    config: NotchianLoginConfig,
+) -> Option<(GameProfile, Option<IdentifiedKey>)> {
     match handle_login(connection, config).await {
         Ok(Some((profile, key))) => Some((profile, key)),
         Ok(None) => None,
@@ -174,9 +207,12 @@ pub async fn wrapped_handle_login(connection: &mut Connection, config: NotchianL
     }
 }
 
-pub async fn handle_login(connection: &mut Connection, config: NotchianLoginConfig) -> anyhow::Result<Option<(GameProfile, Option<IdentifiedKey>)>> {
+pub async fn handle_login(
+    connection: &mut Connection,
+    config: NotchianLoginConfig,
+) -> anyhow::Result<Option<(GameProfile, Option<IdentifiedKey>)>> {
     let mut registry = StateRegistry::<LoginContext>::fail_on_invalid(
-        connection.connection_into().protocol_version()
+        connection.connection_into().protocol_version(),
     );
 
     LoginStart::attach_to_register(
@@ -201,7 +237,8 @@ pub async fn handle_login(connection: &mut Connection, config: NotchianLoginConf
         Arc::clone(&locked_registry),
         Arc::clone(&context),
         next_packet,
-    ).await;
+    )
+    .await;
     if handle_packet_failure(connection, emit_result).await? {
         return Ok(None);
     }
@@ -235,7 +272,8 @@ pub async fn handle_login(connection: &mut Connection, config: NotchianLoginConf
         Arc::clone(&locked_registry),
         Arc::clone(&context),
         next_packet,
-    ).await;
+    )
+    .await;
 
     if let Err(err) = emit_result {
         let context_read = context.read().await;
@@ -257,19 +295,25 @@ pub async fn handle_login(connection: &mut Connection, config: NotchianLoginConf
     connection.enable_crypt(encryption_split);
 
     if context_read.config.compression_threshold > 0 {
-        connection.send_packet(SetCompression {
-            threshold: context_read.config.compression_threshold
-        }).await?;
+        connection
+            .send_packet(SetCompression {
+                threshold: context_read.config.compression_threshold,
+            })
+            .await?;
     }
 
-    let game_profile = context_read.game_profile.as_ref().map(Clone::clone).unwrap();
+    let game_profile = context_read
+        .game_profile
+        .as_ref()
+        .map(Clone::clone)
+        .unwrap();
 
     let login_success = LoginSuccess {
         uuid: game_profile.id,
         username: LoginUsername::from(game_profile.name.to_string()),
         properties: (
             VarInt::try_from(game_profile.properties.len())?,
-            game_profile.properties.iter().map(|x| x.into()).collect()
+            game_profile.properties.iter().map(|x| x.into()).collect(),
         ),
     };
 

@@ -1,6 +1,5 @@
+use mc_registry::shared_types::login::IdentifiedKey;
 use mc_registry::shared_types::GameProfile;
-use mc_registry::shared_types::login::{IdentifiedKey};
-
 
 use crate::client_connection::Connection;
 use crate::login::notchian::NotchianLoginConfig;
@@ -14,7 +13,11 @@ pub struct AuthenticatedPlayerConnection {
 }
 
 impl AuthenticatedPlayerConnection {
-    pub fn verify_player_signature(&self, message: &[&[u8]], signature: &[u8]) -> anyhow::Result<()> {
+    pub fn verify_player_signature(
+        &self,
+        message: &[&[u8]],
+        signature: &[u8],
+    ) -> anyhow::Result<()> {
         match &self.player_key {
             None => anyhow::bail!("Attempted to send signature without player key."),
             Some(key) => {
@@ -32,12 +35,15 @@ impl AuthenticatedPlayerConnection {
     }
 }
 
-pub async fn notchian_login(config: NotchianLoginConfig, mut connection: Connection) -> Option<AuthenticatedPlayerConnection> {
-    notchian::wrapped_handle_login(&mut connection, config).await.map(move |(profile, player_key)| {
-        AuthenticatedPlayerConnection {
+pub async fn notchian_login(
+    config: NotchianLoginConfig,
+    mut connection: Connection,
+) -> Option<AuthenticatedPlayerConnection> {
+    notchian::wrapped_handle_login(&mut connection, config)
+        .await
+        .map(move |(profile, player_key)| AuthenticatedPlayerConnection {
             profile,
             connection,
             player_key,
-        }
-    })
+        })
 }
