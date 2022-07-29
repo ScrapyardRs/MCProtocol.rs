@@ -16,7 +16,7 @@ impl ForwardingMode {
     pub async fn login(&self, connection: Connection) -> Option<AuthenticatedPlayerConnection> {
         match self {
             ForwardingMode::Notchian(config) => {
-                crate::login::notchian_login(config.clone(), connection).await
+                crate::login::notchian_login(*config, connection).await
             }
         }
     }

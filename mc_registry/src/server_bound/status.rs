@@ -1,7 +1,7 @@
 use crate::client_bound::status::Pong;
 
 #[derive(mc_serializer_derive::MCSerde, Debug)]
-pub struct Request {}
+pub struct Request;
 
 #[derive(mc_serializer_derive::MCSerde, Debug)]
 pub struct Ping {

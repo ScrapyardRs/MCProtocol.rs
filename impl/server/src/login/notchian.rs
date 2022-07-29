@@ -199,9 +199,7 @@ pub async fn wrapped_handle_login(
         Ok(Some((profile, key))) => Some((profile, key)),
         Ok(None) => None,
         Err(_) => {
-            match disconnect(connection, "Server error.").await {
-                _ => (),
-            };
+            disconnect(connection, "Server error.").await.unwrap_or(());
             None
         }
     }

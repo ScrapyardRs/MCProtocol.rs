@@ -62,7 +62,7 @@ impl From<StatusPartBuilder> for StatusPart {
         StatusPart {
             max_players: builder.max_players.unwrap_or(0),
             total_online: builder.total_online.unwrap_or(0),
-            motd: builder.motd.unwrap_or(String::from("Hello World!")),
+            motd: builder.motd.unwrap_or_else(|| String::from("Hello World!")),
             player_sample: builder.player_sample.unwrap_or_default(),
             favicon: builder.favicon,
         }

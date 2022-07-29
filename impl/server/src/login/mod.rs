@@ -8,6 +8,7 @@ pub mod notchian;
 
 pub struct AuthenticatedPlayerConnection {
     pub profile: GameProfile,
+    #[allow(dead_code)]
     connection: Connection,
     player_key: Option<IdentifiedKey>,
 }

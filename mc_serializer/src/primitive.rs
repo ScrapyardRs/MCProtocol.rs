@@ -1,24 +1,30 @@
-use crate::serde::{Deserialize, Error, Error::IoError, SerdeResult, Serialize};
+use crate::serde::{Error, Result, ProtocolVersion, Serialize, Deserialize, SerializerContext, Contextual, ProtocolVersionSpec};
 use std::io::{Read, Write};
 
 macro_rules! serde_primitive {
     ($prim_type:ty, $byte_count:literal) => {
+        impl Contextual for $prim_type {
+            fn context() -> String {
+                format!("{}", stringify!($prim_type))
+            }
+        }
+
         impl Deserialize for $prim_type {
-            fn deserialize<R: Read>(reader: &mut R) -> SerdeResult<Self> {
+            fn deserialize<R: Read>(reader: &mut R, _: ProtocolVersion) -> Result<Self> {
                 let mut bytes = [0u8; $byte_count];
-                reader.read_exact(&mut bytes).map_err(|err| IoError(err))?;
+                reader.read_exact(&mut bytes).map_err(|err| Error::IoError(err, Self::base_context()))?;
                 Ok(<$prim_type>::from_be_bytes(bytes))
             }
         }
 
         impl Serialize for $prim_type {
-            fn serialize<W: Write>(&self, writer: &mut W) -> SerdeResult<()> {
+            fn serialize<W: Write>(&self, writer: &mut W, _: ProtocolVersion) -> Result<()> {
                 writer
                     .write_all(&<$prim_type>::to_be_bytes(*self))
-                    .map_err(|err| IoError(err))
+                    .map_err(|err| Error::IoError(err, Self::base_context()))
             }
 
-            fn size(&self) -> SerdeResult<i32> {
+            fn size(&self) -> Result<i32> {
                 Ok($byte_count)
             }
         }
@@ -38,23 +44,30 @@ serde_primitive!(i128, 16);
 serde_primitive!(f32, 4);
 serde_primitive!(f64, 8);
 
+impl Contextual for bool {
+    fn context() -> String {
+        "bool".to_string()
+    }
+}
+
 impl Serialize for bool {
-    fn serialize<W: Write>(&self, writer: &mut W) -> SerdeResult<()> {
+    fn serialize<W: Write>(&self, writer: &mut W, _: ProtocolVersion) -> Result<()> {
         writer
             .write(&[if *self { 0x01 } else { 0x00 }])
-            .map_err(IoError)
+            .map_err(|err| Error::IoError(err, Self::base_context()))
             .map(|_| ())
     }
 
-    fn size(&self) -> SerdeResult<i32> {
+    fn size(&self) -> Result<i32> {
         Ok(1)
     }
 }
 
 impl Deserialize for bool {
-    fn deserialize<R: Read>(reader: &mut R) -> SerdeResult<Self> {
+    fn deserialize<R: Read>(reader: &mut R, _: ProtocolVersion) -> Result<Self> {
         let mut bytes = [0u8; 1];
-        reader.read_exact(&mut bytes).map_err(IoError)?;
+        reader.read_exact(&mut bytes)
+            .map_err(|err| Error::IoError(err, Self::base_context()))?;
         Ok(bytes[0] != 0x0)
     }
 }
@@ -240,17 +253,17 @@ macro_rules! declare_variable_number {
         }
 
         impl $name {
-            pub fn decode_and_size(reader: &mut impl std::io::Read) -> SerdeResult<(i32, Self)> {
+            pub fn decode_and_size(reader: &mut impl std::io::Read) -> Result<(i32, Self)> {
                 let mut running_size = 0;
                 let mut value: $primitive_signed = 0;
                 let mut bit_offset = 0u32;
                 loop {
                     if bit_offset == $bit_limit {
-                        return Err(Error::Generic(format!("Failed to decode Variable Num, too many bytes.")));
+                        return Err(Error::Generic(SerializerContext::new(Self::context(), format!("More bytes than expected, current value: {}.", value))));
                     }
 
                     let mut buf = [0; 1];
-                    reader.read_exact(&mut buf).map_err(|err| IoError(err))?;
+                    reader.read_exact(&mut buf).map_err(|err| Error::IoError(err, Self::base_context()))?;
                     running_size += 1;
                     let byte = buf[0];
                     value |= <$primitive_signed>::from(byte & 0b01111111)
@@ -266,45 +279,32 @@ macro_rules! declare_variable_number {
             }
         }
 
+        impl Contextual for $name {
+            fn context() -> String {
+                format!("{}", stringify!($name))
+            }
+        }
+
         impl Deserialize for $name {
-            fn deserialize<R: std::io::Read>(reader: &mut R) -> SerdeResult<Self> {
-                let mut value: $primitive_signed = 0;
-                let mut bit_offset = 0u32;
-                loop {
-                    if bit_offset == $bit_limit {
-                        return Err(Error::Generic(format!("Failed to decode Variable Num, too many bytes.")));
-                    }
-
-                    let mut buf = [0; 1];
-                    reader.read_exact(&mut buf).map_err(|err| IoError(err))?;
-                    let byte = buf[0];
-                    value |= <$primitive_signed>::from(byte & 0b01111111)
-                        .overflowing_shl(bit_offset)
-                        .0;
-                    bit_offset += 7;
-
-                    if byte & 0b10000000 == 0 {
-                        break;
-                    }
-                }
-                Ok($name(value))
+            fn deserialize<R: std::io::Read>(reader: &mut R, _: ProtocolVersion) -> Result<Self> {
+                <$name>::decode_and_size(reader).map(|res| res.1)
             }
         }
 
         impl Serialize for $name {
-            fn serialize<W: std::io::Write>(&self, writer: &mut W) -> SerdeResult<()> {
+            fn serialize<W: std::io::Write>(&self, writer: &mut W, _: ProtocolVersion) -> Result<()> {
                 let mut temp = self.0.clone() as $primitive_unsigned;
                 loop {
                     if temp & $and_check == 0 {
-                        writer.write_all(&[temp as u8]).map_err(|err| IoError(err))?;
+                        writer.write_all(&[temp as u8]).map_err(|err| Error::IoError(err, Self::base_context()))?;
                         return Ok(());
                     }
-                    writer.write_all(&[(temp & 0x7F | 0x80) as u8]).map_err(|err| IoError(err))?;
+                    writer.write_all(&[(temp & 0x7F | 0x80) as u8]).map_err(|err| Error::IoError(err, Self::base_context()))?;
                     temp = temp.overflowing_shr(7).0;
                 }
             }
 
-            fn size(&self) -> SerdeResult<i32> {
+            fn size(&self) -> Result<i32> {
                 let mut running_size: i32 = 0;
                 let mut temp = self.0.clone() as $primitive_unsigned;
                 loop {
@@ -499,6 +499,17 @@ declare_variable_number!(VarLong, i64, 70, u64, 0xFFFFFFFFFFFFFF80,
 use crate::serde::Error::Generic;
 use std::convert::TryFrom;
 
+/// Creates a length-bounded serializable string.
+///
+/// # Examples
+///
+/// ```
+/// # use mc_serializer::{auto_string, primitive::McString};
+/// # use mc_serializer::primitive::VarInt;
+/// auto_string!(Example, 200);
+/// assert_eq!(Example::limit(), VarInt::from(200));
+/// assert_eq!("Example", Example::from("Example").string().as_str())
+/// ```
 #[macro_export]
 macro_rules! auto_string {
     ($name:ident, $size:literal) => {
@@ -514,6 +525,9 @@ macro_rules! auto_string {
             }
             fn limit() -> $crate::primitive::VarInt {
                 $crate::primitive::VarInt::from($size as i32)
+            }
+            fn context() -> String {
+                format!("{}", stringify!($name))
             }
         }
 
@@ -569,57 +583,58 @@ pub trait McString: Sized {
     fn string(&self) -> &String;
 
     fn limit() -> VarInt;
+
+    fn context() -> String;
 }
 
 impl<T: McString> Deserialize for T {
-    fn deserialize<R: Read>(reader: &mut R) -> SerdeResult<T> {
-        let true_size = VarInt::deserialize(reader)?;
+    fn deserialize<R: Read>(reader: &mut R, protocol_version: ProtocolVersion) -> Result<T> {
+        let true_size = VarInt::deserialize(reader, protocol_version)?;
+        let max_size = T::limit() * 4i32;
 
-        if true_size > T::limit() * 4i32 {
-            return Err(Generic(format!(
-                "Failed to encode string with limit {:?} with given size {}.",
-                T::limit(),
-                true_size
-            )));
+        if true_size > max_size {
+            return Err(Generic(SerializerContext::new(T::context(), format!("Potential over read - expected {} over the maximum {}.", true_size, max_size))));
         }
 
         let mut bytes = vec![0u8; *true_size as usize];
-        reader.read_exact(&mut bytes).map_err(IoError)?;
+        reader.read_exact(&mut bytes).map_err(|err| Error::IoError(err, Self::base_context()))?;
         let internal = String::from_utf8(bytes)
-            .map_err(|_| Generic("Failed to resolve utf8 from bytes.".to_string()))?;
+            .map_err(|err| Error::FromUtf8Error(err, T::base_context()))?;
 
         Ok(T::new(internal))
     }
 }
 
+impl<T: McString> Contextual for T {
+    fn context() -> String {
+        T::context()
+    }
+}
+
 impl<T: McString> Serialize for T {
-    fn serialize<W: Write>(&self, writer: &mut W) -> SerdeResult<()> {
+    fn serialize<W: Write>(&self, writer: &mut W, protocol_version: ProtocolVersion) -> Result<()> {
         let bytes = self.string().as_bytes();
         let length = VarInt::from(bytes.len() as i32);
         if length > T::limit() {
-            return Err(Generic(format!(
-                "Failed to encode string with limit {:?} with given size {}.",
-                T::limit(),
-                bytes.len()
-            )));
+            return Err(Generic(SerializerContext::new(T::context(), format!("Potential over write - expected {} over the maximum {}.", length, T::limit()))));
         }
 
-        length.serialize(writer)?;
-        writer.write_all(bytes).map_err(IoError)?;
-
+        length.serialize(writer, protocol_version)?;
+        writer.write_all(bytes).map_err(|err| Error::IoError(err, Self::base_context()))?;
         Ok(())
     }
 
-    fn size(&self) -> SerdeResult<i32> {
-        let string_len = VarInt::try_from(self.string().len()).map_err(|_| {
-            Generic(format!(
-                "Could not size out string of length: {}",
-                self.string().len()
-            ))
-        })?;
+    fn size(&self) -> Result<i32> {
+        let string_len = VarInt::try_from(self.string().len()).map_err(|err| Error::TryFromIntError(err, Self::base_context()))?;
         Ok((string_len.size()? + string_len).into())
     }
 }
 
 auto_string!(Chat, 32767);
 auto_string!(Identifier, 32767);
+
+impl From<ProtocolVersion> for VarInt {
+    fn from(ver: ProtocolVersion) -> Self {
+        VarInt(Into::<ProtocolVersionSpec>::into(ver).0)
+    }
+}
