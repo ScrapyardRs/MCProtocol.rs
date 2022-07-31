@@ -1,6 +1,5 @@
-
-use crate::primitive::VarInt;
-use crate::serde::{Contextual, Deserialize, Error, ProtocolVersion, Result, Serialize, SerializerContext};
+use crate::primitive::{read_string, size_string, VarInt, write_string};
+use crate::serde::{Contextual, Deserialize, Error, InternalSizer, ProtocolVersion, Result, Serialize, SerializerContext};
 use bytes::Buf;
 use std::io::{Cursor, Read, Write};
 
@@ -19,10 +18,10 @@ impl<T: Serialize> Serialize for (VarInt, Vec<T>) {
         Ok(())
     }
 
-    fn size(&self) -> Result<i32> {
-        let mut size = self.0.size()?;
+    fn size(&self, protocol_version: ProtocolVersion) -> Result<i32> {
+        let mut size = self.0.size(protocol_version)?;
         for item in &self.1 {
-            size += item.size()?;
+            size += item.size(protocol_version)?;
         }
         Ok(size)
     }
@@ -53,10 +52,10 @@ impl<T: Serialize> Serialize for Vec<T> {
         Ok(())
     }
 
-    fn size(&self) -> Result<i32> {
+    fn size(&self, protocol_version: ProtocolVersion) -> Result<i32> {
         let mut size = 0;
         for item in self {
-            size += T::size(item)?;
+            size += T::size(item, protocol_version)?;
         }
         Ok(size)
     }
@@ -103,10 +102,10 @@ impl<T: Serialize> Serialize for (bool, Option<T>) {
         Ok(())
     }
 
-    fn size(&self) -> Result<i32> {
+    fn size(&self, protocol_version: ProtocolVersion) -> Result<i32> {
         Ok(1 + match &self.1 {
             None => 0,
-            Some(item) => T::size(item)?,
+            Some(item) => T::size(item, protocol_version)?,
         })
     }
 }
@@ -135,7 +134,7 @@ impl Serialize for uuid::Uuid {
         u64::serialize(&least_significant, writer, protocol_version)
     }
 
-    fn size(&self) -> Result<i32> {
+    fn size(&self, _: ProtocolVersion) -> Result<i32> {
         Ok(16)
     }
 }
@@ -162,7 +161,7 @@ impl Serialize for nbt::Blob {
         self.to_writer(writer).map_err(|err| Error::Bubbled(Box::new(err), Self::base_context()))
     }
 
-    fn size(&self) -> Result<i32> {
+    fn size(&self, _: ProtocolVersion) -> Result<i32> {
         self.len_bytes().try_into().map_err(|err| Error::TryFromIntError(err, Self::base_context()))
     }
 }
@@ -171,4 +170,45 @@ impl Deserialize for nbt::Blob {
     fn deserialize<R: Read>(reader: &mut R, _: ProtocolVersion) -> Result<Self> {
         nbt::Blob::from_reader(reader).map_err(|err| Error::NbtError(err, Self::base_context()))
     }
+}
+
+pub fn write_json<T, W: Write>(max_length: usize, value: &T, writer: &mut W, protocol_version: ProtocolVersion) -> Result<()>
+    where
+        T: Contextual + serde::ser::Serialize {
+    let value_to_string = serde_json::to_string(value).map_err(|err| Error::SerdeJsonError(err, T::base_context()))?;
+    write_string::<T, W>(max_length, &value_to_string, writer, protocol_version)
+}
+
+pub fn size_json<T>(value: &T, protocol_version: ProtocolVersion) -> Result<i32>
+    where
+        T: Contextual + serde::ser::Serialize {
+    let value_to_string = serde_json::to_string(value).map_err(|err| Error::SerdeJsonError(err, T::base_context()))?;
+    size_string::<T>(&value_to_string, protocol_version)
+}
+
+pub fn read_json<T, R: Read>(max_length: usize, reader: &mut R, protocol_version: ProtocolVersion) -> Result<T>
+    where
+        T: Contextual + for<'de> serde::de::Deserialize<'de> {
+    let json_string = read_string::<T, R>(max_length, reader, protocol_version)?;
+    serde_json::from_slice(json_string.as_bytes()).map_err(|err| Error::SerdeJsonError(err, T::base_context()))
+}
+
+pub fn write_nbt<T, W: Write>(value: &T, writer: &mut W, _: ProtocolVersion) -> Result<()>
+    where
+        T: Contextual + serde::ser::Serialize {
+    nbt::ser::to_writer(writer, value, None).map_err(|err| Error::NbtError(err, T::base_context()))
+}
+
+pub fn size_nbt<T>(value: &T, protocol_version: ProtocolVersion) -> Result<i32>
+    where
+        T: Contextual + serde::ser::Serialize {
+    let mut sizer = InternalSizer::default();
+    write_nbt(value, &mut sizer, protocol_version)?;
+    Ok(sizer.current_size())
+}
+
+pub fn read_nbt<T, R: Read>(reader: &mut R, _: ProtocolVersion) -> Result<T>
+    where
+        T: Contextual + for<'de> serde::de::Deserialize<'de> {
+    nbt::de::from_reader(reader).map_err(|err| Error::NbtError(err, T::base_context()))
 }

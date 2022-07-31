@@ -1,6 +1,7 @@
 use crate::primitive::VarInt;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
+use std::io::Write;
 use std::num::TryFromIntError;
 
 use std::string::FromUtf8Error;
@@ -130,6 +131,8 @@ pub enum Error {
     FromUtf8Error(FromUtf8Error, SerializerContext),
     /// Represents an unknown `std::error::Error` being thrown during serialization.
     Bubbled(Box<dyn std::error::Error>, SerializerContext),
+    /// Represents a `serde_json::Error` type being thrown during ser/de.
+    SerdeJsonError(serde_json::Error, SerializerContext),
 }
 
 impl Error {
@@ -155,6 +158,7 @@ impl Error {
             Error::NbtError(_, context) => (func)(context),
             Error::FromUtf8Error(_, context) => (func)(context),
             Error::Bubbled(_, context) => (func)(context),
+            Error::SerdeJsonError(_, context) => (func)(context),
         };
         self
     }
@@ -169,6 +173,7 @@ impl Display for Error {
             Error::NbtError(nbt_error, context) => write!(f, "Failed to serialize NBT data, {}, NbtError: {}", context, nbt_error),
             Error::FromUtf8Error(utf8_error, context) => write!(f, "Failed to parse utf8 data, {}, FromUtf8Error: {}", context, utf8_error),
             Error::Bubbled(error, context) => write!(f, "Generic error during serialization, {}, Error: {}", context, error),
+            Error::SerdeJsonError(error, context) => write!(f, "Json Parse error during serialization, {}, JsonError: {}", context, error),
         }
     }
 }
@@ -191,6 +196,8 @@ pub enum ProtocolVersion {
     /// Pre-protocol version when the protocol is unclear due to the lack of information rather
     /// the lack of ability to derive the information.
     Handshake,
+    /// 1.18 Revision 2
+    V118R2,
     /// 1.19 Revision 1
     V119R1,
 }
@@ -212,6 +219,7 @@ impl From<ProtocolVersion> for ProtocolVersionSpec {
         match version {
             ProtocolVersion::Unknown => ProtocolVersionSpec(99999, "n/a".to_string()),
             ProtocolVersion::Handshake => ProtocolVersionSpec(-1, "n/a".to_string()),
+            ProtocolVersion::V118R2 => ProtocolVersionSpec(758, "1.18.2".to_string()),
             ProtocolVersion::V119R1 => ProtocolVersionSpec(759, "1.19.1".to_string()),
         }
     }
@@ -262,7 +270,7 @@ pub trait Serialize: Contextual + Sized {
     /// let mut writer = Cursor::new(Vec::with_capacity(1));
     /// Serialize::serialize(&true, &mut writer, ProtocolVersion::Unknown).expect("Should serialize.");
     /// ```
-    fn serialize<W: std::io::Write>(
+    fn serialize<W: Write>(
         &self,
         writer: &mut W,
         protocol_version: ProtocolVersion,
@@ -275,9 +283,9 @@ pub trait Serialize: Contextual + Sized {
     ///
     /// ```
     /// # use mc_serializer::serde::{ProtocolVersion, Serialize};
-    /// assert_eq!(Serialize::size(&true).expect("Should size."), 1);
+    /// assert_eq!(Serialize::size(&true, ProtocolVersion::Unknown).expect("Should size."), 1);
     /// ```
-    fn size(&self) -> Result<i32>;
+    fn size(&self, protocol_version: ProtocolVersion) -> Result<i32>;
 }
 
 /// Represents an object which is deserializable based on the Minecraft serialization specification.
@@ -301,4 +309,33 @@ pub trait Deserialize: Contextual + Sized {
         reader: &mut R,
         protocol_version: ProtocolVersion,
     ) -> Result<Self>;
+}
+
+/// Used for sizing NBT objects which don't necessarily pre-broadcast their size for array
+/// preconditioning.
+pub struct InternalSizer {
+    current_size: i32,
+}
+
+impl Default for InternalSizer {
+    fn default() -> Self {
+        Self { current_size: 0 }
+    }
+}
+
+impl InternalSizer {
+    pub fn current_size(&self) -> i32 {
+        self.current_size
+    }
+}
+
+impl Write for InternalSizer {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.current_size += buf.len() as i32;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }

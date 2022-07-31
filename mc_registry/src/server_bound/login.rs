@@ -4,7 +4,10 @@ use mc_serializer::primitive::VarInt;
 #[derive(mc_serializer_derive::MCSerde, Debug)]
 pub struct LoginStart {
     pub name: LoginUsername,
+    #[serial_if(protocol >= ProtocolVersion::V119)]
     pub sig_data: (bool, Option<MCIdentifiedKey>),
+    #[serial_if(protocol >= ProtocolVersion::V1191)]
+    pub sig_holder: (bool, uuid::Uuid),
 }
 
 #[derive(mc_serializer_derive::MCSerde, Debug)]

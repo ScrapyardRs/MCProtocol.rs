@@ -1,30 +1,42 @@
-use std::collections::HashSet;
-use std::fmt::Display;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::ToTokens;
 use syn::{Attribute, Field, Fields};
-use syn::ReturnType::Default;
+use core::default::Default;
 
-pub struct FieldMarker {
-    is_nbt: bool,
-    conditional: Option<TokenStream>,
+pub enum SerialType {
+    Default,
+    Nbt,
+    Json(TokenStream),
 }
 
-impl FieldMarker {
+impl Default for SerialType {
+    fn default() -> Self {
+        SerialType::Default
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct SerialConfig {
+    serial_type: SerialType,
+    conditional: Option<TokenStream>,
+    default: Option<TokenStream>,
+}
+
+impl SerialConfig {
     fn parse_attribute(&mut self, attribute: &Attribute) {
         let segment = attribute.path.segments.last().unwrap();
-        match segment.ident.to_string() {
-            &"nbt" => self.is_nbt = true,
-            &"serial_if" => self.conditional = Some(attribute.tokens.to_token_stream()),
-            _ => None,
+
+        match segment.ident.to_string().as_str() {
+            "nbt" => self.serial_type = SerialType::Nbt,
+            "json" => self.serial_type = SerialType::Json(attribute.parse_args().expect("Please include a max length for the json string.")),
+            "serial_if" => self.conditional = Some(attribute.parse_args().expect("Please provide a conditional for the `serial_if` operator.")),
+            "default" => self.default = Some(attribute.parse_args().expect("Please provide an expression for the default value.")),
+            _ => (),
         }
     }
 
-    pub fn new(attributes: &Vec<Attribute>) -> Self {
-        let mut marker = Self {
-            is_nbt: false,
-            conditional: None,
-        };
+    pub(crate) fn new(attributes: &Vec<Attribute>) -> Self {
+        let mut marker = Self::default();
         for attribute in attributes {
             marker.parse_attribute(attribute);
         }
@@ -32,176 +44,220 @@ impl FieldMarker {
     }
 }
 
-struct FieldContext {
-    wrapping_struct: TokenStream,
-    hidden_ident: Ident,
-    true_ident: Ident,
-    marker: FieldMarker,
+struct SerialContext {
+    unnamed: bool,
+    struct_context: TokenStream,
+    variable_name: Ident,
+    field_name: Ident,
+    marker: SerialConfig,
 }
 
-impl FieldContext {
-    fn serializer(&self) -> TokenStream {
-        let struct_context = &self.wrapping_struct;
-        let field_ident = &self.hidden_ident;
-        let serializer_base = if self.marker.is_nbt {
-            quote::quote!(nbt::ser::to_writer)
-        } else {
-            quote::quote!(mc_serializer::serde::Serialize::serialize_with_protocol)
-        };
+impl SerialContext {
+    pub fn named(field: &Field, struct_context: &TokenStream) -> Self {
+        let field_ident = field.ident.as_ref().expect("Named fields should have idents.");
+        Self {
+            unnamed: false,
+            struct_context: struct_context.to_token_stream(),
+            variable_name: Ident::new(format!("{}{}", super::PREFIX, field_ident).as_str(), Span::call_site()),
+            field_name: Ident::new(field_ident.to_string().as_str(), Span::call_site()),
+            marker: SerialConfig::new(&field.attrs),
+        }
+    }
+
+    pub fn unnamed(field: &Field, field_ident: Ident, struct_context: &TokenStream) -> Self {
+        Self {
+            unnamed: true,
+            struct_context: struct_context.to_token_stream(),
+            variable_name: Ident::new(format!("{}{}", super::PREFIX, field_ident).as_str(), Span::call_site()),
+            field_name: field_ident,
+            marker: SerialConfig::new(&field.attrs),
+        }
+    }
+
+    fn serializer_short(&self, struct_context: &TokenStream, raw: TokenStream) -> TokenStream {
+        let real_field_ident = &self.field_name;
 
         let serializer_base = quote::quote! {
-            anyhow::Context::context(
-                #serializer_base(
-                    #field_ident,
-                    writer
-                ),
-                format!("Failure in serialization struct_context:{}; field:{}", #struct_context, stringify!(#field_ident))
-            )?;
+            #raw.map_err(|err| err.update_context(|ctx| {
+                ctx.current_struct(format!("{}", #struct_context)).current_field(format!("{}", stringify!(#real_field_ident)));
+            }))?;
         };
 
-        self.marker.conditional.map(|conditional| {
+        self.marker.conditional.as_ref().map(|conditional| {
             let serializer_base = serializer_base.to_token_stream();
             quote::quote! {
                 if #conditional {
                     #serializer_base
-                }
+                };
             }
         }).unwrap_or(serializer_base)
     }
 
-    fn size(&self) -> TokenStream {
-        
+    pub fn serializer(&self) -> TokenStream {
+        let struct_context = &self.struct_context;
+        let field_ident = &self.variable_name;
+
+        let raw_serializer = match &self.marker.serial_type {
+            SerialType::Default => quote::quote!(mc_serializer::serde::Serialize::serialize(#field_ident, writer, protocol_version)),
+            SerialType::Nbt => quote::quote!(mc_serializer::ext::write_nbt(#field_ident, writer, protocol_version)),
+            SerialType::Json(max_length_tokens) => quote::quote!(mc_serializer::ext::write_json(#max_length_tokens, #field_ident, writer, protocol_version)),
+        };
+
+        self.serializer_short(struct_context, raw_serializer)
     }
 
-    fn deserializer(&self) -> TokenStream {}
+    pub fn sizer(&self) -> TokenStream {
+        let struct_context = &self.struct_context;
+        let field_ident = &self.variable_name;
 
-    fn make(&self) -> TokenStream {}
+        let raw_serializer = match &self.marker.serial_type {
+            SerialType::Default => quote::quote!(size += mc_serializer::serde::Serialize::size(#field_ident, protocol_version)),
+            SerialType::Nbt => quote::quote!(size += mc_serializer::ext::size_nbt(#field_ident, protocol_version)),
+            SerialType::Json(_) => quote::quote!(size += mc_serializer::ext::size_json(#field_ident, protocol_version)),
+        };
 
-    fn raw_make(&self) -> TokenStream {}
-}
+        self.serializer_short(struct_context, raw_serializer)
+    }
 
-struct FieldsContext {
-    wrapping_struct: TokenStream,
-    fields: Vec<FieldContext>,
-}
+    pub fn deserializer(&self) -> TokenStream {
+        let struct_context = &self.struct_context;
+        let field_ident = &self.variable_name;
+        let real_field_ident = &self.field_name;
 
-impl FieldsContext {
-    fn create_field_context<D: Display>(struct_context: TokenStream, field_ident: D, field: &Field) -> FieldContext {
-        FieldContext {
-            wrapping_struct: struct_context,
-            hidden_ident: Ident::new(format!("{}{}", super::PREFIX, field_ident).as_str(), Span::call_site()),
-            true_ident: Ident::new(format!("{}", field_ident).as_str(), Span::call_site()),
-            marker: FieldMarker::new(&field.attrs),
+        let raw_deserializer = match &self.marker.serial_type {
+            SerialType::Default => quote::quote!(mc_serializer::serde::Deserialize::deserialize(reader, protocol_version)),
+            SerialType::Nbt => quote::quote!(mc_serializer::ext::read_nbt(reader, protocol_version)),
+            SerialType::Json(max_length_tokens) => quote::quote!(mc_serializer::ext::read_json(#max_length_tokens, reader, protocol_version)),
+        };
+
+        let serializer_base = quote::quote! {
+            #raw_deserializer.map_err(|err| err.update_context(|ctx| {
+                ctx.current_struct(format!("{}", #struct_context)).current_field(format!("{}", stringify!(#real_field_ident)));
+            }))?
+        };
+
+        self.marker.conditional.as_ref().map(|conditional| {
+            let serializer_base = serializer_base.to_token_stream();
+            let otherwise = self.marker.default.as_ref().map(|ts| ts.to_token_stream()).unwrap_or(quote::quote!(None));
+            quote::quote! {
+                let #field_ident = if #conditional {
+                    #serializer_base
+                } else {
+                    #otherwise
+                };
+            }
+        }).unwrap_or(quote::quote!(let #field_ident = #serializer_base;))
+    }
+
+    pub fn enum_variant_def(&self) -> TokenStream {
+        let real_field_name = &self.field_name;
+        quote::quote!(#real_field_name,)
+    }
+
+    pub fn creation_def(&self) -> TokenStream {
+        let real_field_name = &self.field_name;
+        let fake_field_name = &self.variable_name;
+        if self.unnamed {
+            quote::quote!(#fake_field_name,)
+        } else {
+            quote::quote!(#real_field_name: #fake_field_name,)
         }
     }
 
-    pub fn new(struct_context: TokenStream, fields: &Fields) -> Self {
-        let mut field_contexts = Vec::with_capacity(fields.len());
+    pub fn simple_let_map(&self) -> TokenStream {
+        let real_field_name = &self.field_name;
+        let fake_field_name = &self.variable_name;
+        quote::quote!(let #fake_field_name = &self.#real_field_name;)
+    }
 
+    pub fn variant_let_map(&self) -> TokenStream {
+        let real_field_name = &self.field_name;
+        let fake_field_name = &self.variable_name;
+        quote::quote!(let #fake_field_name = #real_field_name;)
+    }
+}
+
+pub struct FieldsWrapper {
+    unnamed: bool,
+    fields: Vec<SerialContext>,
+}
+
+impl FieldsWrapper {
+    pub fn new(fields: &Fields, struct_context: TokenStream) -> Self {
+        let mut serial_fields = Vec::with_capacity(fields.len());
+        let mut unnamed = true;
         match fields {
-            Fields::Named(named_fields) => {
-                for field in named_fields.named.iter() {
-                    let field_ident = field.ident.as_ref().unwrap();
-                    field_contexts.push(Self::create_field_context(
-                        struct_context.to_token_stream(), field_ident, field));
+            Fields::Named(named) => {
+                unnamed = false;
+                for field in named.named.iter() {
+                    serial_fields.push(SerialContext::named(field, &struct_context))
                 }
             }
-            Fields::Unnamed(unnamed_fields) => {
-                for (index, field) in unnamed_fields.unnamed.iter().enumerate() {
-                    let field_ident = format!("tuple_v{}", index);
-                    field_contexts.push(Self::create_field_context(
-                        struct_context.to_token_stream(), field_ident, field));
+            Fields::Unnamed(unnamed) => {
+                for (index, field) in unnamed.unnamed.iter().enumerate() {
+                    let field_ident = Ident::new(format!("tuple_v{}", index).as_str(), Span::call_site());
+                    serial_fields.push(SerialContext::unnamed(field, field_ident, &struct_context))
                 }
             }
-            Fields::Unit => panic!("Unsupported unit fields."),
+            Fields::Unit => {
+                return Self {
+                    unnamed,
+                    fields: vec![],
+                };
+            }
         }
-
         Self {
-            wrapping_struct: struct_context,
-            fields: field_contexts,
+            unnamed,
+            fields: serial_fields,
         }
     }
-}
 
-fn parse_attribute(attribute: &Attribute, marker: &mut FieldMarker) {
-    let segment = attribute.path.segments.last().unwrap();
-    match segment.ident.to_string() {
-        &"nbt" => marker.is_nbt = true,
-        &"serial_if" => marker.conditional = Some(attribute.tokens.to_token_stream()),
-        _ => None,
+    pub fn serializer(&self) -> TokenStream {
+        let tokens = self.fields.iter().map(|item| item.serializer()).collect::<Vec<TokenStream>>();
+        quote::quote!(#(#tokens)*)
     }
-}
 
-fn parse_field_attributes(field: &Field) -> FieldMarker {
-    let mut marker = FieldMarker::default();
-    for attribute in field.attrs.iter() {
-        parse_attribute(attribute, &mut marker);
+    pub fn sizer(&self) -> TokenStream {
+        let tokens = self.fields.iter().map(|item| item.sizer()).collect::<Vec<TokenStream>>();
+        quote::quote!(#(#tokens)*)
     }
-    marker
-}
 
-pub fn make_field_serializer(struct_context: &TokenStream, field_ident: &Ident, field: &Field) -> TokenStream {
-    let marker = parse_field_attributes(field);
+    pub fn deserializer(&self) -> TokenStream {
+        let tokens = self.fields.iter().map(|item| item.deserializer()).collect::<Vec<TokenStream>>();
+        quote::quote!(#(#tokens)*)
+    }
 
-    let serializer_base = if marker.is_nbt {
-        quote::quote!(
-            anyhow::Context::context(
-                nbt::ser::to_writer(
-                    #field_ident,
-                    writer
-                ),
-                format!("Failure in serialization struct_context:{}; field:{}", #struct_context, stringify!(#field_ident))
-            )?;
-        )
-    } else {
-        quote::quote!(
-            anyhow::Context::context(
-                mc_serializer::serde::Serialize::serialize_with_protocol(
-                    #field_ident,
-                    writer
-                ),
-                format!("Failure in serialization struct_context:{}; field:{}", #struct_context, stringify!(#field_ident))
-            )?;
-        )
-    };
-
-    marker.conditional.map(|conditional| {
-        let serializer_base = serializer_base.to_token_stream();
-        quote::quote! {
-            if #conditional {
-                #serializer_base
-            }
+    pub fn enum_variant_def(&self) -> TokenStream {
+        if self.fields.len() == 0 {
+            return quote::quote!();
         }
-    }).unwrap_or(serializer_base)
-}
-
-pub fn make_field_deserializer(struct_context: &TokenStream, field_ident: &Ident, field: &Field) -> TokenStream {
-    let marker = parse_field_attributes(field);
-
-    let deserializer_base = if marker.is_nbt {
-        quote::quote!(
-            anyhow::Context::context(
-                nbt::de::from_reader(reader),
-                format!("Failure in deserialization struct_context:{}; field:{}", #struct_context, stringify!(#field_ident))
-            )?;
-        )
-    } else {
-        quote::quote!(
-            anyhow::Context::context(
-                mc_serializer::serde::Deserialize::deserialize_with_protocol(reader),
-                format!("Failure in deserialization struct_context:{}; field:{}", #struct_context, stringify!(#field_ident))
-            )?;
-        )
-    };
-
-    marker.conditional.map(|conditional| {
-        let deserializer_base = deserializer_base.to_token_stream();
-        quote::quote! {
-            let #field_ident = if #conditional {
-                #deserializer_base
-            } else {
-                None
-            };
+        let tokens = self.fields.iter().map(|item| item.enum_variant_def()).collect::<Vec<TokenStream>>();
+        if self.unnamed {
+            quote::quote!((#(#tokens)*))
+        } else {
+            quote::quote!({#(#tokens)*})
         }
-    }).unwrap_or(quote::quote!(let #field_ident = #deserializer_base;))
+    }
+
+    pub fn creation_def(&self) -> TokenStream {
+        if self.fields.len() == 0 {
+            return quote::quote!();
+        }
+        let tokens = self.fields.iter().map(|item| item.creation_def()).collect::<Vec<TokenStream>>();
+        if self.unnamed {
+            quote::quote!((#(#tokens)*))
+        } else {
+            quote::quote!({#(#tokens)*})
+        }
+    }
+
+    pub fn simple_let_map(&self) -> TokenStream {
+        let tokens = self.fields.iter().map(|item| item.simple_let_map()).collect::<Vec<TokenStream>>();
+        quote::quote!(#(#tokens)*)
+    }
+
+    pub fn variant_let_map(&self) -> TokenStream {
+        let tokens = self.fields.iter().map(|item| item.variant_let_map()).collect::<Vec<TokenStream>>();
+        quote::quote!(#(#tokens)*)
+    }
 }
