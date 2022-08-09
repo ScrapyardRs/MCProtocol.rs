@@ -312,7 +312,7 @@ impl Chat {
         };
     }
 
-    pub fn modify_style<F: FnOnce(&mut Style)>(&mut self, func: F) {
+    pub fn modify_style<F: FnOnce(&mut Style) -> &mut Style>(&mut self, func: F) {
         match self {
             Chat::Text { base, .. } => (func)(&mut base.style),
             Chat::Translatable { base, .. } => (func)(&mut base.style),
@@ -320,7 +320,8 @@ impl Chat {
             Chat::Selector { base, .. } => (func)(&mut base.style),
             Chat::Keybind { base, .. } => (func)(&mut base.style),
             Chat::NbtContents { base, .. } => (func)(&mut base.style),
-            _ => (),
+            #[allow(clippy::needless_return)] // return is necessary to ignore type
+            _ => return,
         };
     }
 
