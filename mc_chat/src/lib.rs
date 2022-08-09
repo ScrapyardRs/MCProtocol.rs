@@ -191,6 +191,7 @@ impl Style {
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct BaseChat {
+    #[serde(skip_serializing_if = "Option::is_none")]
     extra: Option<Vec<Chat>>,
     #[serde(flatten)]
     style: Style,
