@@ -12,7 +12,7 @@ pub enum NextState {
 
 mc_serializer::auto_string!(ServerAddress, 255);
 
-#[derive(mc_serializer_derive::Serial, Debug)]
+#[derive(mc_serializer_derive::Serial, Debug, Clone)]
 pub struct Handshake {
     pub protocol_version: VarInt,
     pub server_address: ServerAddress,
