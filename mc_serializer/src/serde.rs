@@ -357,14 +357,9 @@ pub trait Deserialize: Contextual + Sized {
 
 /// Used for sizing NBT objects which don't necessarily pre-broadcast their size for array
 /// preconditioning.
+#[derive(Default)]
 pub struct InternalSizer {
     current_size: i32,
-}
-
-impl Default for InternalSizer {
-    fn default() -> Self {
-        Self { current_size: 0 }
-    }
 }
 
 impl InternalSizer {

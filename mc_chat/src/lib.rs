@@ -191,7 +191,7 @@ impl Style {
 
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct BaseChat {
-    extra: Option<Vec<Box<Chat>>>,
+    extra: Option<Vec<Chat>>,
     #[serde(flatten)]
     style: Style,
 }
@@ -200,7 +200,7 @@ pub struct BaseChat {
 #[serde(untagged)]
 pub enum Chat {
     Literal(String),
-    ChatArr(Vec<Box<Chat>>),
+    ChatArr(Vec<Chat>),
     Text {
         text: String,
         #[serde(flatten)]
@@ -247,7 +247,7 @@ impl mc_serializer::serde::Contextual for Chat {
 }
 
 impl Chat {
-    pub fn extra(&mut self, extra: Vec<Box<Chat>>) {
+    pub fn extra(&mut self, extra: Vec<Chat>) {
         match self {
             Chat::Text { base, .. } => base.extra = Some(extra),
             Chat::Translatable { base, .. } => base.extra = Some(extra),
@@ -259,7 +259,7 @@ impl Chat {
         };
     }
 
-    fn push_extra_single(base: &mut BaseChat, extra: Box<Chat>) {
+    fn push_extra_single(base: &mut BaseChat, extra: Chat) {
         if let Some(present) = base.extra.as_mut() {
             present.push(extra);
         } else {
@@ -269,7 +269,7 @@ impl Chat {
         }
     }
 
-    pub fn push_extra(&mut self, extra: Box<Chat>) {
+    pub fn push_extra(&mut self, extra: Chat) {
         match self {
             Chat::Text { base, .. } => Self::push_extra_single(base, extra),
             Chat::Translatable { base, .. } => Self::push_extra_single(base, extra),
@@ -293,7 +293,7 @@ impl Chat {
         };
     }
 
-    fn append_extra_single(base: &mut BaseChat, mut extra: Vec<Box<Chat>>) {
+    fn append_extra_single(base: &mut BaseChat, mut extra: Vec<Chat>) {
         if let Some(present) = base.extra.as_mut() {
             present.append(&mut extra);
         } else {
@@ -301,7 +301,7 @@ impl Chat {
         }
     }
 
-    pub fn append_extra(&mut self, extra: Vec<Box<Chat>>) {
+    pub fn append_extra(&mut self, extra: Vec<Chat>) {
         match self {
             Chat::Text { base, .. } => Self::append_extra_single(base, extra),
             Chat::Translatable { base, .. } => Self::append_extra_single(base, extra),
