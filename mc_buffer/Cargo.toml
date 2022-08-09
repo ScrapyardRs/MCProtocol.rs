@@ -13,4 +13,5 @@ log = "0.4.17"
 mc_serializer = { path = "../mc_serializer", version = "0.1.0" }
 mc_registry = { path = "../mc_registry", version = "0.1.0" }
 mc_registry_derive = { path = "../mc_registry_derive", version = "0.1.0" }
-tokio = { version = "1.19.2", features = ["io-std", "io-util", "time", "net"] }
+tokio = { version = "1.19.2", features = ["io-std", "io-util", "time", "net", "bytes"] }
+futures = "0.3.21"
