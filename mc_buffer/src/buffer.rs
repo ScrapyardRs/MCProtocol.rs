@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::Context;
 use tokio::io::AsyncReadExt;
 use tokio::net::tcp::ReadHalf;
-use tokio::net::unix::OwnedReadHalf;
+use tokio::net::tcp::OwnedReadHalf;
 
 const BUFFER_CAPACITY: usize = 2097154; // static value from wiki.vg
 
