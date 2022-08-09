@@ -68,7 +68,7 @@ impl SerialConfig {
 }
 
 struct SerialContext {
-    unnamed: bool,
+    unnamed: (bool, usize),
     struct_context: TokenStream,
     variable_name: Ident,
     field_name: Ident,
@@ -83,7 +83,7 @@ impl SerialContext {
             .as_ref()
             .expect("Named fields should have idents.");
         Self {
-            unnamed: false,
+            unnamed: (false, 0),
             struct_context: struct_context.to_token_stream(),
             variable_name: Ident::new(
                 format!("{}{}", super::PREFIX, field_ident).as_str(),
@@ -95,9 +95,9 @@ impl SerialContext {
         }
     }
 
-    pub fn unnamed(field: &Field, field_ident: Ident, struct_context: &TokenStream) -> Self {
+    pub fn unnamed(field: &Field, field_ident: Ident, index: usize, struct_context: &TokenStream) -> Self {
         Self {
-            unnamed: true,
+            unnamed: (true, index),
             struct_context: struct_context.to_token_stream(),
             variable_name: Ident::new(
                 format!("{}{}", super::PREFIX, field_ident).as_str(),
@@ -240,7 +240,7 @@ impl SerialContext {
     pub fn creation_def(&self) -> TokenStream {
         let real_field_name = &self.field_name;
         let fake_field_name = &self.variable_name;
-        if self.unnamed {
+        if self.unnamed.0 {
             quote::quote!(#fake_field_name,)
         } else {
             quote::quote!(#real_field_name: #fake_field_name,)
@@ -250,7 +250,12 @@ impl SerialContext {
     pub fn simple_let_map(&self) -> TokenStream {
         let real_field_name = &self.field_name;
         let fake_field_name = &self.variable_name;
-        quote::quote!(let #fake_field_name = &self.#real_field_name;)
+        if self.unnamed.0 {
+            let index = syn::Index::from(self.unnamed.1);
+            quote::quote!(let #fake_field_name = &self.#index;)
+        } else {
+            quote::quote!(let #fake_field_name = &self.#real_field_name;)
+        }
     }
 
     pub fn variant_let_map(&self) -> TokenStream {
@@ -280,7 +285,7 @@ impl FieldsWrapper {
                 for (index, field) in unnamed.unnamed.iter().enumerate() {
                     let field_ident =
                         Ident::new(format!("tuple_v{}", index).as_str(), Span::call_site());
-                    serial_fields.push(SerialContext::unnamed(field, field_ident, &struct_context))
+                    serial_fields.push(SerialContext::unnamed(field, field_ident, index, &struct_context))
                 }
             }
             Fields::Unit => {
