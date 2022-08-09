@@ -1,6 +1,6 @@
 use serde_derive::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Score {
     name: String,
     objective: String,
@@ -15,7 +15,7 @@ impl Score {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum DataSource {
     Block { block: String },
@@ -43,7 +43,7 @@ impl DataSource {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "action")]
 pub enum ClickEvent {
     #[serde(rename = "open_url")]
@@ -98,7 +98,7 @@ impl ClickEvent {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "action")]
 pub enum HoverEvent {
     #[serde(rename = "open_url")]
@@ -111,7 +111,7 @@ impl HoverEvent {
     }
 }
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Style {
     #[serde(skip_serializing_if = "Option::is_none")]
     color: Option<String>,
@@ -189,14 +189,14 @@ impl Style {
     }
 }
 
-#[derive(Serialize, Deserialize, Default, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct BaseChat {
     extra: Option<Vec<Chat>>,
     #[serde(flatten)]
     style: Style,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Chat {
     Literal(String),
