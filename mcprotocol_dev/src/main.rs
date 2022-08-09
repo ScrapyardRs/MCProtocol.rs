@@ -5,3 +5,10 @@ use mc_registry::server_bound::handshaking::Handshake;
 async fn main() -> anyhow::Result<()> {
     Ok(())
 }
+
+struct Context;
+
+#[mc_registry_derive::packet_handler]
+pub fn test(packet: Handshake, context: LockedContext<Context>) {
+
+}

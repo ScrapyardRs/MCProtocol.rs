@@ -14,7 +14,7 @@ pub type LockedContext<Context> = ArcLocked<Context>;
 pub type LockedStateRegistry<'a, Context> = ArcLocked<StateRegistry<'a, Context>>;
 pub type StateRegistryHandle<'a, Context> = fn(
     LockedContext<Context>,
-    LockedStateRegistry<Context>,
+    LockedStateRegistry<'a, Context>,
     ProtocolVersion,
     Cursor<Vec<u8>>,
 ) -> BoxedFuture<'a>;
