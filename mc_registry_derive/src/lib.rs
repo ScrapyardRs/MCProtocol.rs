@@ -105,12 +105,12 @@ pub fn packet_handler(
         .unwrap_or(quote::quote!(mc_registry::registry::LockedContext<#context_tokens>));
 
     proc_macro::TokenStream::from(quote::quote! {
-        fn #fn_name(
+        fn #fn_name<'registry_derive>(
             __context: #full_context_tokens,
-            __registry: mc_registry::registry::LockedStateRegistry<#context_tokens>,
+            __registry: mc_registry::registry::LockedStateRegistry<'registry_derive, #context_tokens>,
             __protocol_version: mc_serializer::serde::ProtocolVersion,
             __buffer: std::io::Cursor<Vec<u8>>,
-        ) -> mc_registry::registry::BoxedFuture {
+        ) -> mc_registry::registry::BoxedFuture<'registry_derive> {
             Box::pin(async move {
                 let __packet = mc_registry::mappings::create_packet::<#mappings_tokens>(__protocol_version, __buffer)?;
                 #(#extra_setters)*
