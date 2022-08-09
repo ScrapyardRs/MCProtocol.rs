@@ -63,7 +63,6 @@ pub fn packet_handler(
                                 true
                             }
                         } else {
-                            println!("GOT: {}", next);
                             true
                         }
                     }).collect());
