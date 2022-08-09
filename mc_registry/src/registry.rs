@@ -7,33 +7,33 @@ use std::io::Cursor;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub type BoxedFuture = BoxFuture<'static, crate::Result<()>>;
+pub type BoxedFuture<'a> = BoxFuture<'a, crate::Result<()>>;
 
 pub type ArcLocked<Item> = Arc<RwLock<Item>>;
 pub type LockedContext<Context> = ArcLocked<Context>;
-pub type LockedStateRegistry<Context> = ArcLocked<StateRegistry<Context>>;
-pub type StateRegistryHandle<Context> = fn(
+pub type LockedStateRegistry<'a, Context> = ArcLocked<StateRegistry<'a, Context>>;
+pub type StateRegistryHandle<'a, Context> = fn(
     LockedContext<Context>,
     LockedStateRegistry<Context>,
     ProtocolVersion,
     Cursor<Vec<u8>>,
-) -> BoxedFuture;
-pub type FailureHandle<Context> = fn(LockedContext<Context>, VarInt) -> BoxedFuture;
+) -> BoxedFuture<'a>;
+pub type FailureHandle<Context> = fn(LockedContext<Context>, VarInt) -> BoxedFuture<'static>;
 
 pub fn arc_lock<T>(object: T) -> ArcLocked<T> {
     Arc::new(RwLock::new(object))
 }
 
-pub struct StateRegistry<Context> {
+pub struct StateRegistry<'a, Context> {
     protocol_version: ProtocolVersion,
-    mappings: HashMap<VarInt, Arc<StateRegistryHandle<Context>>>,
+    mappings: HashMap<VarInt, Arc<StateRegistryHandle<'a, Context>>>,
     fail_on_invalid: bool,
 }
 
-impl<Context> StateRegistry<Context> {
+impl<'a, Context> StateRegistry<'a, Context> {
     pub fn attach_mappings<MappingsType: Mappings>(
         &mut self,
-        handle: StateRegistryHandle<Context>,
+        handle: StateRegistryHandle<'a, Context>,
     ) {
         if let Ok(id) = MappingsType::retrieve_packet_id(self.protocol_version) {
             self.mappings.insert(id, Arc::new(handle));
@@ -45,7 +45,7 @@ impl<Context> StateRegistry<Context> {
     }
 
     pub async fn emit(
-        arc_self: LockedStateRegistry<Context>,
+        arc_self: LockedStateRegistry<'a, Context>,
         context: LockedContext<Context>,
         mut packet_buffer: Cursor<Vec<u8>>,
     ) -> anyhow::Result<()> {
