@@ -30,6 +30,11 @@ pub struct StateRegistry<'a, Context> {
     fail_on_invalid: bool,
 }
 
+pub struct UnhandledContext {
+    pub packet_id: VarInt,
+    pub bytes: Vec<u8>,
+}
+
 impl<'a, Context> StateRegistry<'a, Context> {
     pub fn attach_mappings<'b, MappingsType: Mappings>(
         &mut self,
@@ -48,7 +53,7 @@ impl<'a, Context> StateRegistry<'a, Context> {
         arc_self: LockedStateRegistry<'a, Context>,
         context: LockedContext<Context>,
         mut packet_buffer: Cursor<Vec<u8>>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<UnhandledContext>> {
         let self_read_lock = arc_self.read().await;
         let protocol_version = self_read_lock.protocol_version;
         let packet_id = VarInt::deserialize(&mut packet_buffer, protocol_version)?;
@@ -57,10 +62,16 @@ impl<'a, Context> StateRegistry<'a, Context> {
             let handler = Arc::clone(handler);
             drop(self_read_lock);
             (handler)(context, arc_self, protocol_version, packet_buffer).await?;
-        } else if self_read_lock.fail_on_invalid {
-            anyhow::bail!("Failed to process invalid packet ID {:?}", packet_id);
+            Ok(None)
+        } else {
+            if self_read_lock.fail_on_invalid {
+                anyhow::bail!("Failure to understand packet id {}", packet_id)
+            }
+            Ok(Some(UnhandledContext {
+                packet_id,
+                bytes: packet_buffer.into_inner(),
+            }))
         }
-        Ok(())
     }
 
     pub fn new(protocol_version: ProtocolVersion) -> Self {
