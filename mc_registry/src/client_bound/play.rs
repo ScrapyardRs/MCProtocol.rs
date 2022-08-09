@@ -6,7 +6,7 @@ use crate::shared_types::{GameProfile, MCIdentifiedKey};
 use crate::shared_types::play::{BlockPos, Difficulty, GameType, Recipe, ResourceLocation};
 use mc_serializer::serde::Contextual;
 
-#[derive(mc_serializer_derive::Serial, Debug)]
+#[derive(mc_serializer_derive::Serial, Debug, Default)]
 pub struct RelativeArgument {
     current_mask: u8,
 }
@@ -28,14 +28,6 @@ impl RelativeArgument {
 
     pub fn is_set(&self, value: u8) -> bool {
         (self.current_mask & value) == value
-    }
-}
-
-impl Default for RelativeArgument {
-    fn default() -> Self {
-        RelativeArgument {
-            current_mask: 0,
-        }
     }
 }
 

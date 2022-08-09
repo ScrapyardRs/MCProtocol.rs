@@ -242,7 +242,7 @@ pub enum Chat {
 
 impl mc_serializer::serde::Contextual for Chat {
     fn context() -> String {
-        format!("Chat")
+        "Chat".to_string()
     }
 }
 
@@ -263,9 +263,7 @@ impl Chat {
         if let Some(present) = base.extra.as_mut() {
             present.push(extra);
         } else {
-            let mut new_vec = Vec::new();
-            new_vec.push(extra);
-            base.extra = Some(new_vec);
+            base.extra = Some(vec![extra]);
         }
     }
 

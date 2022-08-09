@@ -279,10 +279,6 @@ impl Deserialize for Command {
 }
 
 impl Command {
-    pub fn is_root(&self) -> bool {
-        self.command_flags & 0 != 0
-    }
-
     pub fn is_literal(&self) -> bool {
         self.command_flags & 1 != 0
     }
