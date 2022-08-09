@@ -6,8 +6,8 @@ pub trait Mappings {
     type PacketType;
 
     fn attach_to_register<'a, 'b: 'a, Context>(
-        registry: &'a mut crate::registry::StateRegistry<'b, Context>,
-        handle: crate::registry::StateRegistryHandle<'b, Context>,
+        registry: &'b mut crate::registry::StateRegistry<'a, Context>,
+        handle: crate::registry::StateRegistryHandle<'a, Context>,
     );
 
     fn create_packet(
@@ -34,8 +34,8 @@ macro_rules! create_mappings {
         impl $crate::mappings::Mappings for $registrar_type {
             type PacketType = $registrar_type;
 
-            fn attach_to_register<'a, 'b: 'a, Context>(registry: &'a mut $crate::registry::StateRegistry<'b, Context>, handle: $crate::registry::StateRegistryHandle<'b, Context>) {
-                registry.attach_mappings::<$registrar_type>(handle);
+            fn attach_to_register<'a, 'b: 'a, Context>(registry: &'b mut $crate::registry::StateRegistry<'a, Context>, handle: $crate::registry::StateRegistryHandle<'a, Context>) {
+                registry.attach_mappings::<'a, $registrar_type>(handle);
             }
 
             fn create_packet(_protocol_version: mc_serializer::serde::ProtocolVersion, mut buffer: std::io::Cursor<Vec<u8>>) -> $crate::error::Result<Self::PacketType> {

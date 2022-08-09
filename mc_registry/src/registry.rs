@@ -31,10 +31,10 @@ pub struct StateRegistry<'a, Context> {
 }
 
 impl<'a, Context> StateRegistry<'a, Context> {
-    pub fn attach_mappings<MappingsType: Mappings>(
-        &mut self,
+    pub fn attach_mappings<'b, MappingsType: Mappings>(
+        &'b mut self,
         handle: StateRegistryHandle<'a, Context>,
-    ) {
+    ) where 'b: 'a {
         if let Ok(id) = MappingsType::retrieve_packet_id(self.protocol_version) {
             self.mappings.insert(id, Arc::new(handle));
         }
