@@ -1,18 +1,20 @@
 use proc_macro2::TokenStream;
 use syn::{DataStruct, DeriveInput};
 
-pub fn expand_serial_struct(derive_input: &DeriveInput, syn_struct: &DataStruct) -> TokenStream {
+pub fn expand_serial_bitmap(derive_input: &DeriveInput, syn_struct: &DataStruct) -> TokenStream {
     let struct_ident = &derive_input.ident;
-    let fields_wrapper = super::fields::FieldsWrapper::new(
-        &syn_struct.fields,
-        quote::quote!(stringify!(#struct_ident)),
-    );
 
-    let serializer = fields_wrapper.serializer();
-    let deserializer = fields_wrapper.deserializer();
-    let sizer = fields_wrapper.sizer();
-    let creation_def = fields_wrapper.creation_def();
-    let simple_let_map = fields_wrapper.simple_let_map();
+    let (mut ser, mut de, mut make) = (Vec::new(), Vec::new(), Vec::new());
+
+    let mut bit_marker = 1u8;
+
+    for field in syn_struct.fields.iter() {
+        let field_ident = field.ident.as_ref().unwrap();
+        ser.push(quote::quote!(if self.#field_ident { by |= #bit_marker; }));
+        de.push(quote::quote!(let #field_ident = (by & #bit_marker) != 0;));
+        make.push(quote::quote!(#field_ident,));
+        bit_marker *= 2;
+    }
 
     quote::quote! {
         impl mc_serializer::serde::Contextual for #struct_ident {
@@ -27,16 +29,13 @@ pub fn expand_serial_struct(derive_input: &DeriveInput, syn_struct: &DataStruct)
                     writer: &mut W,
                     protocol_version: mc_serializer::serde::ProtocolVersion,
                 ) -> mc_serializer::serde::Result<()> {
-                #simple_let_map
-                #serializer
-                Ok(())
+                let mut by = 0u8;
+                #(#ser)*
+                u8::serialize(&by, writer, protocol_version)
             }
 
             fn size(&self, protocol_version: mc_serializer::serde::ProtocolVersion) -> mc_serializer::serde::Result<i32> {
-                let mut size = 0;
-                #simple_let_map
-                #sizer
-                Ok(size)
+                Ok(1)
             }
         }
 
@@ -45,8 +44,9 @@ pub fn expand_serial_struct(derive_input: &DeriveInput, syn_struct: &DataStruct)
                 reader: &mut R,
                 protocol_version: mc_serializer::serde::ProtocolVersion,
             ) -> mc_serializer::serde::Result<Self> {
-                #deserializer
-                Ok(#struct_ident #creation_def)
+                let by = u8::deserialize(reader, protocol_version)?;
+                #(#de)*
+                Ok(Self { #(#make)* })
             }
         }
     }

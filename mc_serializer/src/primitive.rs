@@ -1,4 +1,7 @@
-use crate::serde::{Error, Result, ProtocolVersion, Serialize, Deserialize, SerializerContext, Contextual, ProtocolVersionSpec};
+use crate::serde::{
+    Contextual, Deserialize, Error, ProtocolVersion, ProtocolVersionSpec, Result, Serialize,
+    SerializerContext,
+};
 use std::io::{Read, Write};
 
 macro_rules! serde_primitive {
@@ -12,7 +15,9 @@ macro_rules! serde_primitive {
         impl Deserialize for $prim_type {
             fn deserialize<R: Read>(reader: &mut R, _: ProtocolVersion) -> Result<Self> {
                 let mut bytes = [0u8; $byte_count];
-                reader.read_exact(&mut bytes).map_err(|err| Error::IoError(err, Self::base_context()))?;
+                reader
+                    .read_exact(&mut bytes)
+                    .map_err(|err| Error::IoError(err, Self::base_context()))?;
                 Ok(<$prim_type>::from_be_bytes(bytes))
             }
         }
@@ -66,7 +71,8 @@ impl Serialize for bool {
 impl Deserialize for bool {
     fn deserialize<R: Read>(reader: &mut R, _: ProtocolVersion) -> Result<Self> {
         let mut bytes = [0u8; 1];
-        reader.read_exact(&mut bytes)
+        reader
+            .read_exact(&mut bytes)
             .map_err(|err| Error::IoError(err, Self::base_context()))?;
         Ok(bytes[0] != 0x0)
     }
@@ -513,7 +519,7 @@ use std::convert::TryFrom;
 #[macro_export]
 macro_rules! auto_string {
     ($name:ident, $size:literal) => {
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         pub struct $name(String);
 
         impl $crate::primitive::McString for $name {
@@ -589,7 +595,11 @@ pub trait McString: Sized {
 
 impl<T: McString> Deserialize for T {
     fn deserialize<R: Read>(reader: &mut R, protocol_version: ProtocolVersion) -> Result<T> {
-        Ok(T::new(read_string::<Self, R>(*T::limit() as usize, reader, protocol_version)?))
+        Ok(T::new(read_string::<Self, R>(
+            *T::limit() as usize,
+            reader,
+            protocol_version,
+        )?))
     }
 }
 
@@ -601,7 +611,12 @@ impl<T: McString> Contextual for T {
 
 impl<T: McString> Serialize for T {
     fn serialize<W: Write>(&self, writer: &mut W, protocol_version: ProtocolVersion) -> Result<()> {
-        write_string::<Self, W>(*T::limit() as usize, self.string(), writer, protocol_version)
+        write_string::<Self, W>(
+            *T::limit() as usize,
+            self.string(),
+            writer,
+            protocol_version,
+        )
     }
 
     fn size(&self, protocol_version: ProtocolVersion) -> Result<i32> {
@@ -609,41 +624,98 @@ impl<T: McString> Serialize for T {
     }
 }
 
-pub fn write_string_checked<C: Contextual, W: Write>(bytes: &[u8], writer: &mut W, protocol_version: ProtocolVersion) -> Result<()> {
+pub fn write_string_checked<C: Contextual, W: Write>(
+    bytes: &[u8],
+    writer: &mut W,
+    protocol_version: ProtocolVersion,
+) -> Result<()> {
     let length = VarInt::from(bytes.len() as i32);
 
     length.serialize(writer, protocol_version)?;
-    writer.write_all(bytes).map_err(|err| Error::IoError(err, C::base_context()))?;
+    writer
+        .write_all(bytes)
+        .map_err(|err| Error::IoError(err, C::base_context()))?;
     Ok(())
 }
 
-pub fn write_string<C: Contextual, W: Write>(max_length: usize, string: &String, writer: &mut W, protocol_version: ProtocolVersion) -> Result<()> {
+pub fn write_string<C: Contextual, W: Write>(
+    max_length: usize,
+    string: &String,
+    writer: &mut W,
+    protocol_version: ProtocolVersion,
+) -> Result<()> {
     let bytes = string.as_bytes();
     let length = VarInt::from(bytes.len() as i32);
-    if length > max_length * 4 {
-        return Err(Generic(SerializerContext::new(C::context(), format!("Attempted to write string of length {} when max is {}.", length, max_length * 4))));
+    if length > max_length * 3 {
+        return Err(Generic(SerializerContext::new(
+            C::context(),
+            format!(
+                "Attempted to write string of length {} when max is {}.",
+                length,
+                max_length * 4
+            ),
+        )));
+    }
+    if length < 0 {
+        return Err(Generic(SerializerContext::new(
+            C::context(),
+            format!(
+                "Cannot read a string of less than 0 length. Given {}.",
+                length
+            ),
+        )));
     }
     write_string_checked::<C, W>(bytes, writer, protocol_version)
 }
 
-pub fn read_string_checked<C: Contextual, R: Read>(length: usize, reader: &mut R, _: ProtocolVersion) -> Result<String> {
+pub fn read_string_checked<C: Contextual, R: Read>(
+    length: usize,
+    reader: &mut R,
+    _: ProtocolVersion,
+) -> Result<String> {
     let mut bytes = vec![0u8; length];
-    reader.read_exact(&mut bytes).map_err(|err| Error::IoError(err, C::base_context()))?;
-    let internal = String::from_utf8(bytes)
-        .map_err(|err| Error::FromUtf8Error(err, C::base_context()))?;
+    reader
+        .read_exact(&mut bytes)
+        .map_err(|err| Error::IoError(err, C::base_context()))?;
+    let internal =
+        String::from_utf8(bytes).map_err(|err| Error::FromUtf8Error(err, C::base_context()))?;
     Ok(internal)
 }
 
-pub fn read_string<C: Contextual, R: Read>(max_length: usize, reader: &mut R, protocol_version: ProtocolVersion) -> Result<String> {
+pub fn read_string<C: Contextual, R: Read>(
+    max_length: usize,
+    reader: &mut R,
+    protocol_version: ProtocolVersion,
+) -> Result<String> {
     let length = VarInt::deserialize(reader, protocol_version)?;
-    if length > max_length * 4 {
-        return Err(Generic(SerializerContext::new(C::context(), format!("Attempted to read string of length {} when max is {}.", length, max_length * 4))));
+    if length > max_length * 3 {
+        return Err(Generic(SerializerContext::new(
+            C::context(),
+            format!(
+                "Attempted to read string of length {} when max is {}.",
+                length,
+                max_length * 4
+            ),
+        )));
+    }
+    if length < 0 {
+        return Err(Generic(SerializerContext::new(
+            C::context(),
+            format!(
+                "Cannot read a string of less than 0 length. Given {}.",
+                length
+            ),
+        )));
     }
     read_string_checked::<C, R>(*length as usize, reader, protocol_version)
 }
 
-pub fn size_string<C: Contextual>(value: &String, protocol_version: ProtocolVersion) -> Result<i32> {
-    let string_len = VarInt::try_from(value.len()).map_err(|err| Error::TryFromIntError(err, C::base_context()))?;
+pub fn size_string<C: Contextual>(
+    value: &String,
+    protocol_version: ProtocolVersion,
+) -> Result<i32> {
+    let string_len = VarInt::try_from(value.len())
+        .map_err(|err| Error::TryFromIntError(err, C::base_context()))?;
     Ok((string_len.size(protocol_version)? + string_len).into())
 }
 
@@ -652,3 +724,5 @@ impl From<ProtocolVersion> for VarInt {
         VarInt(Into::<ProtocolVersionSpec>::into(ver).0)
     }
 }
+
+auto_string!(Identifier, 32767);

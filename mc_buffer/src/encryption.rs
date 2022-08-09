@@ -8,7 +8,7 @@ use flate2::bufread::{ZlibDecoder, ZlibEncoder};
 use flate2::Compression;
 
 use mc_serializer::primitive::VarInt;
-use mc_serializer::serde::Serialize;
+use mc_serializer::serde::{ProtocolVersion, Serialize};
 
 pub type EncryptionStream = Cfb8<Aes128>;
 
@@ -69,14 +69,14 @@ impl Compressor {
             encoder.read_to_end(&mut compressed)?;
 
             let compressed_length = VarInt::try_from(compressed.len())?;
-            let uncompressed_length_length = initial_size.size()?;
+            let uncompressed_length_length = initial_size.size(ProtocolVersion::Unknown)?;
             let total_length_data = compressed_length + VarInt::from(uncompressed_length_length);
 
             let mut result = Cursor::new(Vec::with_capacity(
-                (total_length_data.size()? + uncompressed_length_length).try_into()?,
+                (total_length_data.size(ProtocolVersion::Unknown)? + uncompressed_length_length).try_into()?,
             ));
-            total_length_data.serialize(&mut result)?;
-            initial_size.serialize(&mut result)?;
+            total_length_data.serialize(&mut result, ProtocolVersion::Unknown)?;
+            initial_size.serialize(&mut result, ProtocolVersion::Unknown)?;
 
             let mut inner = result.into_inner();
             inner.append(&mut compressed);
@@ -84,9 +84,9 @@ impl Compressor {
         } else {
             let total_length_data = VarInt::from(1i32 /* 0 = 1 byte */) + initial_size;
 
-            let mut result = Vec::with_capacity((total_length_data.size()?).try_into()?);
-            total_length_data.serialize(&mut result)?;
-            VarInt::from(0).serialize(&mut result)?;
+            let mut result = Vec::with_capacity((total_length_data.size(ProtocolVersion::Unknown)?).try_into()?);
+            total_length_data.serialize(&mut result, ProtocolVersion::Unknown)?;
+            VarInt::from(0).serialize(&mut result, ProtocolVersion::Unknown)?;
             result.append(&mut packet);
             Ok(result)
         }
@@ -108,9 +108,9 @@ impl Compressor {
 
     pub fn uncompressed(mut packet: Vec<u8>) -> anyhow::Result<Vec<u8>> {
         let length = VarInt::try_from(packet.len())?;
-        let length_size = length.size()?;
+        let length_size = length.size(ProtocolVersion::Unknown)?;
         let mut writer = Vec::with_capacity((length + length_size).try_into()?);
-        length.serialize(&mut writer)?;
+        length.serialize(&mut writer, ProtocolVersion::Unknown)?;
         writer.append(&mut packet);
         Ok(writer)
     }

@@ -1,16 +1,16 @@
-use crate::shared_types::login::{LoginUsername, MCIdentifiedKey};
+use crate::shared_types::login::LoginUsername;
 use mc_serializer::primitive::VarInt;
+use mc_serializer::serde::Contextual;
+use crate::shared_types::MCIdentifiedKey;
 
-#[derive(mc_serializer_derive::MCSerde, Debug)]
+#[derive(mc_serializer_derive::Serial, Debug)]
 pub struct LoginStart {
     pub name: LoginUsername,
-    #[serial_if(protocol >= ProtocolVersion::V119)]
     pub sig_data: (bool, Option<MCIdentifiedKey>),
-    #[serial_if(protocol >= ProtocolVersion::V1191)]
-    pub sig_holder: (bool, uuid::Uuid),
+    pub sig_holder: (bool, Option<uuid::Uuid>),
 }
 
-#[derive(mc_serializer_derive::MCSerde, Debug)]
+#[derive(mc_serializer_derive::Serial, Debug)]
 #[key(bool)]
 pub enum EncryptionResponseData {
     #[key(true)]
@@ -22,13 +22,13 @@ pub enum EncryptionResponseData {
     },
 }
 
-#[derive(mc_serializer_derive::MCSerde, Debug)]
+#[derive(mc_serializer_derive::Serial, Debug)]
 pub struct EncryptionResponse {
     pub shared_secret: (VarInt, Vec<u8>),
     pub response_data: EncryptionResponseData,
 }
 
-#[derive(mc_serializer_derive::MCSerde, Debug)]
+#[derive(mc_serializer_derive::Serial, Debug)]
 pub struct LoginPluginResponse {
     pub message_id: VarInt,
     pub successful: bool,

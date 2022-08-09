@@ -1,0 +1,10 @@
+[package]
+name = "mc_chat"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "1.0.140"
+serde_derive = "1.0.138"
+serde_json = "1.0.82"
+mc_serializer = { path = "../mc_serializer", version = "0.1.0" }

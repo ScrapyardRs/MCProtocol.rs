@@ -1,9 +1,9 @@
 use crate::client_bound::status::Pong;
 
-#[derive(mc_serializer_derive::MCSerde, Debug)]
+#[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Request;
 
-#[derive(mc_serializer_derive::MCSerde, Debug)]
+#[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Ping {
     pub start_time: i64,
 }

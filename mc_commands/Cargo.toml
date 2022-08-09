@@ -1,0 +1,8 @@
+[package]
+name = "mc_commands"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mc_serializer = { path = "../mc_serializer", version = "0.1.0" }
+mc_serializer_derive = { path = "../mc_serializer_derive", version = "0.1.0" }

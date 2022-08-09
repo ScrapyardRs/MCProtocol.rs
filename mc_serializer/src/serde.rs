@@ -129,8 +129,6 @@ pub enum Error {
     NbtError(nbt::Error, SerializerContext),
     /// Represents a UTF-8 error when deserializing a `MCString`.
     FromUtf8Error(FromUtf8Error, SerializerContext),
-    /// Represents an unknown `std::error::Error` being thrown during serialization.
-    Bubbled(Box<dyn std::error::Error>, SerializerContext),
     /// Represents a `serde_json::Error` type being thrown during ser/de.
     SerdeJsonError(serde_json::Error, SerializerContext),
 }
@@ -157,7 +155,6 @@ impl Error {
             Error::TryFromIntError(_, context) => (func)(context),
             Error::NbtError(_, context) => (func)(context),
             Error::FromUtf8Error(_, context) => (func)(context),
-            Error::Bubbled(_, context) => (func)(context),
             Error::SerdeJsonError(_, context) => (func)(context),
         };
         self
@@ -168,12 +165,31 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::Generic(context) => write!(f, "Failed to serialize data, {}", context),
-            Error::IoError(io_error, context) => write!(f, "Failed to serialize data, {}, IoError: {}", context, io_error),
-            Error::TryFromIntError(int_error, context) => write!(f, "Failed to serialize data, {}, IntError: {}", context, int_error),
-            Error::NbtError(nbt_error, context) => write!(f, "Failed to serialize NBT data, {}, NbtError: {}", context, nbt_error),
-            Error::FromUtf8Error(utf8_error, context) => write!(f, "Failed to parse utf8 data, {}, FromUtf8Error: {}", context, utf8_error),
-            Error::Bubbled(error, context) => write!(f, "Generic error during serialization, {}, Error: {}", context, error),
-            Error::SerdeJsonError(error, context) => write!(f, "Json Parse error during serialization, {}, JsonError: {}", context, error),
+            Error::IoError(io_error, context) => write!(
+                f,
+                "Failed to serialize data, {}, IoError: {}",
+                context, io_error
+            ),
+            Error::TryFromIntError(int_error, context) => write!(
+                f,
+                "Failed to serialize data, {}, IntError: {}",
+                context, int_error
+            ),
+            Error::NbtError(nbt_error, context) => write!(
+                f,
+                "Failed to serialize NBT data, {}, NbtError: {}",
+                context, nbt_error
+            ),
+            Error::FromUtf8Error(utf8_error, context) => write!(
+                f,
+                "Failed to parse utf8 data, {}, FromUtf8Error: {}",
+                context, utf8_error
+            ),
+            Error::SerdeJsonError(error, context) => write!(
+                f,
+                "Json Parse error during serialization, {}, JsonError: {}",
+                context, error
+            ),
         }
     }
 }
@@ -196,10 +212,16 @@ pub enum ProtocolVersion {
     /// Pre-protocol version when the protocol is unclear due to the lack of information rather
     /// the lack of ability to derive the information.
     Handshake,
-    /// 1.18 Revision 2
-    V118R2,
-    /// 1.19 Revision 1
-    V119R1,
+    /// 1.19
+    V119,
+    /// 1.19.1
+    V119_1,
+}
+
+impl Display for ProtocolVersion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl PartialOrd for ProtocolVersion {
@@ -214,13 +236,39 @@ impl PartialOrd for ProtocolVersion {
     }
 }
 
+impl ProtocolVersion {
+    pub fn get_protocol_id(&self) -> i32 {
+        let spec = ProtocolVersionSpec::from(*self);
+        spec.0
+    }
+
+    pub fn get_protocol_string(&self) -> String {
+        let spec = ProtocolVersionSpec::from(*self);
+        spec.1
+    }
+
+    pub fn get_world_version(&self) -> i32 {
+        match self {
+            ProtocolVersion::V119 => 3105,
+            ProtocolVersion::V119_1 => 3117,
+            _ => -1i32,
+        }
+    }
+}
+
+macro_rules! spec_arm {
+    ($ver:literal $str:literal) => {
+        ProtocolVersionSpec($ver, $str.to_string())
+    };
+}
+
 impl From<ProtocolVersion> for ProtocolVersionSpec {
     fn from(version: ProtocolVersion) -> Self {
         match version {
-            ProtocolVersion::Unknown => ProtocolVersionSpec(99999, "n/a".to_string()),
-            ProtocolVersion::Handshake => ProtocolVersionSpec(-1, "n/a".to_string()),
-            ProtocolVersion::V118R2 => ProtocolVersionSpec(758, "1.18.2".to_string()),
-            ProtocolVersion::V119R1 => ProtocolVersionSpec(759, "1.19.1".to_string()),
+            ProtocolVersion::Unknown => spec_arm!(5000 "Unknown"),
+            ProtocolVersion::Handshake => spec_arm!(-1 "n/a"),
+            ProtocolVersion::V119 => spec_arm!(759 "1.19"),
+            ProtocolVersion::V119_1 => spec_arm!(760 "1.19.1"),
         }
     }
 }
@@ -228,7 +276,7 @@ impl From<ProtocolVersion> for ProtocolVersionSpec {
 impl From<i32> for ProtocolVersion {
     fn from(val: i32) -> Self {
         match val {
-            759 => ProtocolVersion::V119R1,
+            760 => ProtocolVersion::V119_1,
             _ => ProtocolVersion::Unknown,
         }
     }
@@ -270,11 +318,7 @@ pub trait Serialize: Contextual + Sized {
     /// let mut writer = Cursor::new(Vec::with_capacity(1));
     /// Serialize::serialize(&true, &mut writer, ProtocolVersion::Unknown).expect("Should serialize.");
     /// ```
-    fn serialize<W: Write>(
-        &self,
-        writer: &mut W,
-        protocol_version: ProtocolVersion,
-    ) -> Result<()>;
+    fn serialize<W: Write>(&self, writer: &mut W, protocol_version: ProtocolVersion) -> Result<()>;
 
     /// Retrieves the size of a given serializable object. This is used to pre-condition buffers
     /// to hold the data of serialization.
@@ -337,5 +381,30 @@ impl Write for InternalSizer {
 
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
+    }
+}
+
+#[macro_export]
+macro_rules! wrap_struct_context {
+    ($field:literal, $($tt:tt)*) => {
+        $($tt)*.map_err(|err| err.update_context(|ctx| { ctx.current_struct(Self::context()).current_field(format!($field)); }))
+    }
+}
+
+#[macro_export]
+macro_rules! wrap_indexed_struct_context {
+    ($field:literal, $index:expr, $($tt:tt)*) => {
+        $($tt)*.map_err(|err| err.update_context(|ctx| { ctx.current_struct(Self::context()).current_field(format!("{}[index={}]", $field, $index)); }) )
+    }
+}
+
+#[macro_export]
+macro_rules! contextual {
+    ($obj:ident) => {
+        impl mc_serializer::serde::Contextual for $obj {
+            fn context() -> String {
+                format!("{}", stringify!($obj))
+            }
+        }
     }
 }
