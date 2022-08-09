@@ -41,16 +41,29 @@ pub fn packet_handler(
             match ident_str.as_str() {
                 "context" | "_context" => {
                     extra_setters.push(quote::quote!(let #extra #true_ident = __context;));
+                    let mut depth = 0;
                     context_tokens_guard = Some(stream.clone().skip_while(|next| {
                         if let TokenTree::Punct(punct) = next {
                             punct.as_char() != '<'
                         } else {
                             true
                         }
-                    }).skip(1).take_while(|next| {
+                    }).skip(1).take_while(move |next| {
                         if let TokenTree::Punct(punct) = next {
-                            punct.as_char() != '>'
+                            if punct.as_char() == '<' {
+                                depth += 1;
+                                true
+                            } else if punct.as_char() == '>' {
+                                if depth == 0 {
+                                    return false;
+                                }
+                                depth -= 1;
+                                true
+                            } else {
+                                true
+                            }
                         } else {
+                            println!("GOT: {}", next);
                             true
                         }
                     }).collect());
@@ -105,12 +118,12 @@ pub fn packet_handler(
         .unwrap_or(quote::quote!(mc_registry::registry::LockedContext<#context_tokens>));
 
     proc_macro::TokenStream::from(quote::quote! {
-        fn #fn_name(
+        fn #fn_name<'registry>(
             __context: #full_context_tokens,
-            __registry: mc_registry::registry::LockedStateRegistry<'_, #context_tokens>,
+            __registry: mc_registry::registry::LockedStateRegistry<'registry, #context_tokens>,
             __protocol_version: mc_serializer::serde::ProtocolVersion,
             __buffer: std::io::Cursor<Vec<u8>>,
-        ) -> mc_registry::registry::BoxedFuture<'_> {
+        ) -> mc_registry::registry::BoxedFuture<'registry> {
             Box::pin(async move {
                 let __packet = mc_registry::mappings::create_packet::<#mappings_tokens>(__protocol_version, __buffer)?;
                 #(#extra_setters)*
