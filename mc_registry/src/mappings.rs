@@ -5,9 +5,9 @@ use std::io::Cursor;
 pub trait Mappings {
     type PacketType;
 
-    fn attach_to_register<'a, Context>(
-        registry: &'a mut crate::registry::StateRegistry<'a, Context>,
-        handle: crate::registry::StateRegistryHandle<'a, Context>,
+    fn attach_to_register<'a, 'b: 'a, Context>(
+        registry: &'a mut crate::registry::StateRegistry<'b, Context>,
+        handle: crate::registry::StateRegistryHandle<'b, Context>,
     );
 
     fn create_packet(
@@ -34,7 +34,7 @@ macro_rules! create_mappings {
         impl $crate::mappings::Mappings for $registrar_type {
             type PacketType = $registrar_type;
 
-            fn attach_to_register<'a, Context>(registry: &'a mut $crate::registry::StateRegistry<'a, Context>, handle: $crate::registry::StateRegistryHandle<'a, Context>) {
+            fn attach_to_register<'a, 'b: 'a, Context>(registry: &'a mut $crate::registry::StateRegistry<'b, Context>, handle: $crate::registry::StateRegistryHandle<'b, Context>) {
                 registry.attach_mappings::<$registrar_type>(handle);
             }
 
