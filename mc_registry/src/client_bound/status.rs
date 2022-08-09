@@ -49,7 +49,7 @@ contextual!(StatusResponsePlayers);
 contextual!(StatusResponse);
 
 #[derive(mc_serializer_derive::Serial, Debug)]
-pub struct Response(#[json(32767)] StatusResponse);
+pub struct Response(#[json(32767)] pub StatusResponse);
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Pong {
