@@ -4,10 +4,10 @@ use mc_serializer::primitive::VarInt;
 use std::io::Cursor;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
-use tokio::net::tcp::OwnedReadHalf;
+use tokio::net::tcp::ReadHalf;
 
-pub struct MinecraftPacketBuffer {
-    read_half: OwnedReadHalf,
+pub struct MinecraftPacketBuffer<'a> {
+    read_half: ReadHalf<'a>,
     bytes: BytesMut,
     decoded: BytesMut,
     decryption: Option<Decrypt>,
@@ -21,8 +21,8 @@ pub enum BufferState {
     Error(String),
 }
 
-impl MinecraftPacketBuffer {
-    pub fn new(read_half: OwnedReadHalf) -> Self {
+impl<'a> MinecraftPacketBuffer<'a> {
+    pub fn new(read_half: ReadHalf<'a>) -> Self {
         MinecraftPacketBuffer {
             read_half,
             bytes: BytesMut::with_capacity(BUFFER_CAPACITY),
@@ -58,14 +58,14 @@ impl MinecraftPacketBuffer {
             Duration::from_secs(10),
             self.read_half.read_buf(&mut self.bytes),
         )
-        .await
+            .await
         {
             Ok(result) => result?,
             Err(_) => {
                 return Ok(BufferState::Error(String::from("Client read timeout.")));
             }
         }
-        .min(self.decoded.capacity() - self.decoded.len());
+            .min(self.decoded.capacity() - self.decoded.len());
 
         if size_read == 0 {
             return Ok(if self.is_packet_available() {
