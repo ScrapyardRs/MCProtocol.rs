@@ -35,10 +35,9 @@ impl<Context> StateRegistry<Context> {
         &mut self,
         handle: StateRegistryHandle<Context>,
     ) {
-        self.mappings.insert(
-            MappingsType::retrieve_packet_id(self.protocol_version),
-            Arc::new(handle),
-        );
+        if let Ok(id) = MappingsType::retrieve_packet_id(self.protocol_version) {
+            self.mappings.insert(id, Arc::new(handle));
+        }
     }
 
     pub fn clear_mappings(&mut self) {
@@ -50,9 +49,9 @@ impl<Context> StateRegistry<Context> {
         context: LockedContext<Context>,
         mut packet_buffer: Cursor<Vec<u8>>,
     ) -> anyhow::Result<()> {
-        let packet_id = VarInt::deserialize(&mut packet_buffer)?;
         let self_read_lock = arc_self.read().await;
         let protocol_version = self_read_lock.protocol_version;
+        let packet_id = VarInt::deserialize(&mut packet_buffer, protocol_version)?;
         let handler = self_read_lock.mappings.get(&packet_id);
         if let Some(handler) = handler {
             let handler = Arc::clone(handler);

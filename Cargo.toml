@@ -3,9 +3,10 @@ members = [
     "encryption_utils",
     "mcprotocol_dev",
     "mc_buffer",
+    "mc_chat",
+    "mc_commands",
     "mc_registry",
     "mc_registry_derive",
     "mc_serializer",
     "mc_serializer_derive",
-    "impl/server"
 ]

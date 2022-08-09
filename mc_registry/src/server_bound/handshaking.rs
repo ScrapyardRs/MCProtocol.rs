@@ -1,6 +1,7 @@
 use mc_serializer::primitive::VarInt;
+use mc_serializer::serde::Contextual;
 
-#[derive(mc_serializer_derive::MCSerde, Debug, Copy, Clone)]
+#[derive(mc_serializer_derive::Serial, Debug, Copy, Clone)]
 #[key(VarInt)]
 pub enum NextState {
     #[key(VarInt::from(1))]
@@ -11,7 +12,7 @@ pub enum NextState {
 
 mc_serializer::auto_string!(ServerAddress, 255);
 
-#[derive(mc_serializer_derive::MCSerde, Debug)]
+#[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Handshake {
     pub protocol_version: VarInt,
     pub server_address: ServerAddress,

@@ -1,12 +1,12 @@
 use crate::server_bound::status::Ping;
 mc_serializer::auto_string!(JSONResponse, 32767);
 
-#[derive(mc_serializer_derive::MCSerde, Debug)]
+#[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Response {
     pub json_response: JSONResponse,
 }
 
-#[derive(mc_serializer_derive::MCSerde, Debug)]
+#[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Pong {
     pub start_time: i64,
 }
