@@ -324,7 +324,7 @@ impl FieldsWrapper {
     }
 
     pub fn enum_variant_def(&self) -> TokenStream {
-        if self.fields.len() == 0 {
+        if self.fields.is_empty() {
             return quote::quote!();
         }
         let tokens = self
@@ -340,7 +340,7 @@ impl FieldsWrapper {
     }
 
     pub fn creation_def(&self) -> TokenStream {
-        if self.fields.len() == 0 {
+        if self.fields.is_empty() {
             return quote::quote!();
         }
         let tokens = self

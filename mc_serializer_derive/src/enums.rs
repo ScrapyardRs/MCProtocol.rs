@@ -24,7 +24,7 @@ pub fn is_default_variant(attributes: &Vec<Attribute>) -> bool {
             }
         }
     }
-    return false;
+    false
 }
 
 struct VariantWrapper {

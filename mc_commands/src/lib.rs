@@ -174,13 +174,13 @@ pub struct Command {
 
 impl Contextual for Command {
     fn context() -> String {
-        format!("Command")
+        "Command".to_string()
     }
 }
 
 impl Contextual for NodeStub {
     fn context() -> String {
-        format!("NodeStub")
+        "NodeStub".to_string()
     }
 }
 
@@ -190,7 +190,7 @@ impl Serialize for Command {
         wrap_struct_context!("children", self.children.serialize(writer, protocol_version))?;
         if self.command_flags & 8 != 0 {
             match self.redirect {
-                None => return Err(Error::Generic(SerializerContext::new(Self::context(), format!("Found `None` redirect when one was specified.")))),
+                None => return Err(Error::Generic(SerializerContext::new(Self::context(), "Found `None` redirect when one was specified.".to_string()))),
                 Some(redirect) => wrap_struct_context!("redirect", redirect.serialize(writer, protocol_version))?,
             }
         }
@@ -218,7 +218,7 @@ impl Serialize for Command {
         size += wrap_struct_context!("children", self.children.size(protocol_version))?;
         if self.command_flags & 8 != 0 {
             match self.redirect {
-                None => return Err(mc_serializer::serde::Error::Generic(SerializerContext::new(Self::context(), format!("Found `None` redirect when one was specified.")))),
+                None => return Err(mc_serializer::serde::Error::Generic(SerializerContext::new(Self::context(), "Found `None` redirect when one was specified.".to_string()))),
                 Some(redirect) => size += wrap_struct_context!("redirect", redirect.size(protocol_version))?,
             }
         }

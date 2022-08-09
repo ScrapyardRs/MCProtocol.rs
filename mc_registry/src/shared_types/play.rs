@@ -40,7 +40,7 @@ pub struct ShapedRecipeSerializer {
 
 impl Contextual for ShapedRecipeSerializer {
     fn context() -> String {
-        format!("ShapedRecipeSerializer")
+        "ShapedRecipeSerializer".to_string()
     }
 }
 
@@ -96,7 +96,7 @@ impl Deserialize for ShapedRecipeSerializer {
                     ),
                 )
                 .update_context(|ctx| {
-                    ctx.current_field(format!("ingredients"))
+                    ctx.current_field("ingredients".to_string())
                         .current_struct(Self::context());
                 })
             })?);
@@ -275,7 +275,7 @@ pub struct BlockPos {
 
 impl Contextual for BlockPos {
     fn context() -> String {
-        format!("BlockPos")
+        "BlockPos".to_string()
     }
 }
 
@@ -286,11 +286,11 @@ const MULTIPLY_DE_BRUIJN_BIT_POSITION: [u64; 32] = [
 
 const fn ceil_log_2(n: u64) -> u64 {
     let n = if is_power_of_2(n) { n } else { shift_2(n) };
-    MULTIPLY_DE_BRUIJN_BIT_POSITION[((n * 125613361u64 >> 27u64) & 0x1Fu64) as usize]
+    MULTIPLY_DE_BRUIJN_BIT_POSITION[(((n * 125613361u64) >> 27u64) & 0x1Fu64) as usize]
 }
 
 const fn is_power_of_2(n: u64) -> bool {
-    n != 0u64 && (n & n - 1u64) == 0u64
+    n != 0u64 && (n & (n - 1u64)) == 0u64
 }
 
 const fn shift_2(n: u64) -> u64 {
@@ -324,7 +324,7 @@ impl Serialize for BlockPos {
     ) -> mc_serializer::serde::Result<()> {
         let mut value: i64 = 0;
         value |= (self.x as i64 & PACKED_X_MASK) << X_OFFSET;
-        value |= (self.y as i64 & PACKED_Y_MASK) << 0;
+        value |= self.y as i64 & PACKED_Y_MASK;
         value |= (self.z as i64 & PACKED_Z_MASK) << Z_OFFSET;
         i64::serialize(&value, writer, protocol_version)
     }
@@ -340,9 +340,9 @@ impl Deserialize for BlockPos {
         protocol_version: ProtocolVersion,
     ) -> mc_serializer::serde::Result<Self> {
         let long = i64::deserialize(reader, protocol_version)?;
-        let x = (long << 64 - X_OFFSET - PACKED_X_LENGTH >> 64 - PACKED_X_LENGTH) as i32;
-        let y = (long << 64 - PACKED_Y_LENGTH >> 64 - PACKED_Y_LENGTH) as i32;
-        let z = (long << 64 - Z_OFFSET - PACKED_Z_LENGTH >> 64 - PACKED_Z_LENGTH) as i32;
+        let x = (long << (64 - X_OFFSET - PACKED_X_LENGTH) >> (64 - PACKED_X_LENGTH)) as i32;
+        let y = (long << (64 - PACKED_Y_LENGTH) >> (64 - PACKED_Y_LENGTH)) as i32;
+        let z = (long << (64 - Z_OFFSET - PACKED_Z_LENGTH) >> (64 - PACKED_Z_LENGTH)) as i32;
         Ok(BlockPos { x, y, z })
     }
 }
@@ -355,7 +355,7 @@ pub struct ChunkPos {
 
 impl Contextual for ChunkPos {
     fn context() -> String {
-        format!("ChunkPos")
+        "ChunkPos".to_string()
     }
 }
 
