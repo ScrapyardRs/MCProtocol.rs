@@ -236,6 +236,12 @@ impl PartialOrd for ProtocolVersion {
     }
 }
 
+impl Default for ProtocolVersion {
+    fn default() -> Self {
+        Self::V119_1
+    }
+}
+
 impl ProtocolVersion {
     pub fn get_protocol_id(&self) -> i32 {
         let spec = ProtocolVersionSpec::from(*self);
