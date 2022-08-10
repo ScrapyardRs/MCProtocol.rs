@@ -1,12 +1,12 @@
 use crate::encryption::Decrypt;
+use anyhow::Context;
 use bytes::{Buf, BufMut, BytesMut};
 use mc_serializer::primitive::VarInt;
 use std::io::Cursor;
 use std::time::Duration;
-use anyhow::Context;
 use tokio::io::AsyncReadExt;
-use tokio::net::tcp::ReadHalf;
 use tokio::net::tcp::OwnedReadHalf;
+use tokio::net::tcp::ReadHalf;
 
 const BUFFER_CAPACITY: usize = 2097154; // static value from wiki.vg
 
@@ -57,10 +57,12 @@ pub trait PacketBuffer: Send + Sync {
                 return Ok(BufferState::PacketReady);
             }
 
-            let size_read = match tokio::time::timeout(Duration::from_secs(10), self.read()).await {
-                Ok(result) => result?,
-                Err(_) => return Ok(BufferState::Error(String::from("Client read timeout."))),
-            }.min(self.decoded().capacity() - self.decoded().len());
+            let size_read =
+                match tokio::time::timeout(Duration::from_secs(10), self.read()).await {
+                    Ok(result) => result?,
+                    Err(_) => return Ok(BufferState::Error(String::from("Client read timeout."))),
+                }
+                .min(self.decoded().capacity() - self.decoded().len());
 
             if size_read == 0 {
                 return Ok(if self.is_packet_available() {
@@ -83,7 +85,9 @@ pub trait PacketBuffer: Send + Sync {
 
             let read_half = bytes.chunks_mut(size_read).next().unwrap();
 
-            if let Some(decryption) = decryption { decryption.decrypt(read_half); }
+            if let Some(decryption) = decryption {
+                decryption.decrypt(read_half);
+            }
 
             decoded.put_slice(read_half);
 
@@ -176,9 +180,80 @@ impl<'a> BorrowedPacketBuffer<'a> {
     }
 
     pub fn into_owned_buffer(self, owned_half: OwnedReadHalf) -> OwnedPacketBuffer {
-        let BorrowedPacketBuffer { bytes, decoded, decryption, .. } = self;
+        let BorrowedPacketBuffer {
+            bytes,
+            decoded,
+            decryption,
+            ..
+        } = self;
         OwnedPacketBuffer {
             read_half: owned_half,
+            bytes,
+            decoded,
+            decryption,
+        }
+    }
+
+    pub fn transport(self) -> BufferTransport {
+        let BorrowedPacketBuffer {
+            bytes,
+            decoded,
+            decryption,
+            ..
+        } = self;
+        BufferTransport {
+            bytes,
+            decoded,
+            decryption,
+        }
+    }
+}
+
+impl OwnedPacketBuffer {
+    pub fn transport(self) -> BufferTransport {
+        let OwnedPacketBuffer {
+            bytes,
+            decoded,
+            decryption,
+            ..
+        } = self;
+        BufferTransport {
+            bytes,
+            decoded,
+            decryption,
+        }
+    }
+}
+
+pub struct BufferTransport {
+    bytes: BytesMut,
+    decoded: BytesMut,
+    decryption: Option<Decrypt>,
+}
+
+impl BufferTransport {
+    pub fn owned(self, owned: OwnedReadHalf) -> OwnedPacketBuffer {
+        let BufferTransport {
+            bytes,
+            decoded,
+            decryption,
+        } = self;
+        OwnedPacketBuffer {
+            read_half: owned,
+            bytes,
+            decoded,
+            decryption,
+        }
+    }
+
+    pub fn borrowed(self, borrow: ReadHalf) -> BorrowedPacketBuffer {
+        let BufferTransport {
+            bytes,
+            decoded,
+            decryption,
+        } = self;
+        BorrowedPacketBuffer {
+            read_half: borrow,
             bytes,
             decoded,
             decryption,
