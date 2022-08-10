@@ -272,6 +272,6 @@ pub struct Disconnect {
 
 crate::create_mappings! {
     Disconnect {
-        def 0x17;
+        def 0x19;
     }
 }
