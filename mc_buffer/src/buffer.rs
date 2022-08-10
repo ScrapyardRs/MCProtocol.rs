@@ -212,11 +212,14 @@ impl<'a> BorrowedPacketBuffer<'a> {
             decryption,
             ..
         } = self;
-        BufferTransport {
+        print!("{:?} ==", (bytes.len(), decoded.len()));
+        let transport = BufferTransport {
             bytes,
             decoded,
             decryption,
-        }
+        };
+        println!("{:?}", (transport.bytes.len(), transport.decoded.len()));
+        transport
     }
 }
 
@@ -235,17 +238,20 @@ impl OwnedPacketBuffer {
     }
 
     pub fn transport(self) -> BufferTransport {
+        print!("{:?} ==", (self.len()));
         let OwnedPacketBuffer {
             bytes,
             decoded,
             decryption,
             ..
         } = self;
-        BufferTransport {
+        let transport = BufferTransport {
             bytes,
             decoded,
             decryption,
-        }
+        };
+        println!("{:?}", (transport.bytes.len(), transport.decoded.len()));
+        transport
     }
 }
 
