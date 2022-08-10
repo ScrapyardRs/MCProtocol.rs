@@ -105,10 +105,15 @@ pub trait PacketBuffer: Send + Sync {
     fn loop_read(&mut self) -> PacketBufferFuture<Vec<u8>> {
         Box::pin(async move {
             loop {
+                println!("Pollin!");
                 match self.poll().await? {
                     BufferState::PacketReady => {
+                        println!("PACKET READY!");
                         let mut cursor = Cursor::new(self.decoded().chunk());
                         let (length_size, length) = VarInt::decode_and_size(&mut cursor)?;
+
+                        println!("Decoded and sized... {:?}, {:?}", length_size, length);
+
                         self.decoded_mut().advance(length_size.try_into()?);
                         let cursor: Vec<u8> = self
                             .decoded_mut()
@@ -117,13 +122,18 @@ pub trait PacketBuffer: Send + Sync {
                             .unwrap()
                             .to_vec();
 
+                        println!("Decoding...");
+
                         self.decoded_mut().advance(length.try_into()?);
                         let len = self.decoded().len();
                         self.decoded_mut().reserve(BUFFER_CAPACITY - len);
+
+                        println!("Built cursor :P");
+
                         return Ok(cursor);
                     }
                     BufferState::Error(buffer_error) => anyhow::bail!(buffer_error),
-                    _ => (),
+                    BufferState::Waiting => println!("Buffer Waiting"),
                 }
             }
         })
