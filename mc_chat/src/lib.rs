@@ -195,6 +195,10 @@ pub struct BaseChat {
     extra: Option<Vec<Chat>>,
     #[serde(flatten)]
     style: Style,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    click_event: Option<ClickEvent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hover_event: Option<HoverEvent>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -247,17 +251,43 @@ impl mc_serializer::serde::Contextual for Chat {
     }
 }
 
+impl From<String> for Chat {
+    fn from(str: String) -> Self {
+        Self::text(str)
+    }
+}
+
+impl From<&String> for Chat {
+    fn from(str: &String) -> Self {
+        Self::text(str)
+    }
+}
+
+impl From<&str> for Chat {
+    fn from(str: &str) -> Self {
+        Self::text(str)
+    }
+}
+
 impl Chat {
-    pub fn extra(&mut self, extra: Vec<Chat>) {
+    fn base_mute(&mut self) -> Option<&mut BaseChat> {
         match self {
-            Chat::Text { base, .. } => base.extra = Some(extra),
-            Chat::Translatable { base, .. } => base.extra = Some(extra),
-            Chat::Score { base, .. } => base.extra = Some(extra),
-            Chat::Selector { base, .. } => base.extra = Some(extra),
-            Chat::Keybind { base, .. } => base.extra = Some(extra),
-            Chat::NbtContents { base, .. } => base.extra = Some(extra),
-            _ => (),
+            Chat::Text { base, .. } => Some(base),
+            Chat::Translatable { base, .. } => Some(base),
+            Chat::Score { base, .. } => Some(base),
+            Chat::Selector { base, .. } => Some(base),
+            Chat::Keybind { base, .. } => Some(base),
+            Chat::NbtContents { base, .. } => Some(base),
+            _ => None,
+        }
+    }
+
+    pub fn extra(&mut self, extra: Vec<Chat>) {
+        let mut base_mut = match self.base_mute() {
+            None => return,
+            Some(x) => x,
         };
+        base_mut.extra = Some(extra);
     }
 
     fn push_extra_single(base: &mut BaseChat, extra: Chat) {
@@ -269,27 +299,19 @@ impl Chat {
     }
 
     pub fn push_extra(&mut self, extra: Chat) {
-        match self {
-            Chat::Text { base, .. } => Self::push_extra_single(base, extra),
-            Chat::Translatable { base, .. } => Self::push_extra_single(base, extra),
-            Chat::Score { base, .. } => Self::push_extra_single(base, extra),
-            Chat::Selector { base, .. } => Self::push_extra_single(base, extra),
-            Chat::Keybind { base, .. } => Self::push_extra_single(base, extra),
-            Chat::NbtContents { base, .. } => Self::push_extra_single(base, extra),
-            _ => (),
+        let base_mut = match self.base_mute() {
+            None => return,
+            Some(x) => x,
         };
+        Self::push_extra_single(base_mut, extra);
     }
 
     pub fn clear_extra(&mut self) {
-        match self {
-            Chat::Text { base, .. } => base.extra = None,
-            Chat::Translatable { base, .. } => base.extra = None,
-            Chat::Score { base, .. } => base.extra = None,
-            Chat::Selector { base, .. } => base.extra = None,
-            Chat::Keybind { base, .. } => base.extra = None,
-            Chat::NbtContents { base, .. } => base.extra = None,
-            _ => (),
+        let base_mut = match self.base_mute() {
+            None => return,
+            Some(x) => x,
         };
+        base_mut.extra = None;
     }
 
     fn append_extra_single(base: &mut BaseChat, mut extra: Vec<Chat>) {
@@ -301,28 +323,35 @@ impl Chat {
     }
 
     pub fn append_extra(&mut self, extra: Vec<Chat>) {
-        match self {
-            Chat::Text { base, .. } => Self::append_extra_single(base, extra),
-            Chat::Translatable { base, .. } => Self::append_extra_single(base, extra),
-            Chat::Score { base, .. } => Self::append_extra_single(base, extra),
-            Chat::Selector { base, .. } => Self::append_extra_single(base, extra),
-            Chat::Keybind { base, .. } => Self::append_extra_single(base, extra),
-            Chat::NbtContents { base, .. } => Self::append_extra_single(base, extra),
-            _ => (),
+        let base_mut = match self.base_mute() {
+            None => return,
+            Some(x) => x,
         };
+        Self::append_extra_single(base_mut, extra);
     }
 
     pub fn modify_style<F: FnOnce(&mut Style) -> &mut Style>(&mut self, func: F) {
-        match self {
-            Chat::Text { base, .. } => (func)(&mut base.style),
-            Chat::Translatable { base, .. } => (func)(&mut base.style),
-            Chat::Score { base, .. } => (func)(&mut base.style),
-            Chat::Selector { base, .. } => (func)(&mut base.style),
-            Chat::Keybind { base, .. } => (func)(&mut base.style),
-            Chat::NbtContents { base, .. } => (func)(&mut base.style),
-            #[allow(clippy::needless_return)] // return is necessary to ignore type
-            _ => return,
+        let base_mut = match self.base_mute() {
+            None => return,
+            Some(x) => x,
         };
+        (func)(&mut base_mut.style);
+    }
+
+    pub fn click_event(&mut self, click_event: ClickEvent) {
+        let base_mut = match self.base_mute() {
+            None => return,
+            Some(x) => x,
+        };
+        base_mut.click_event = Some(click_event);
+    }
+
+    pub fn hover_event(&mut self, hover_event: HoverEvent) {
+        let base_mut = match self.base_mute() {
+            None => return,
+            Some(x) => x,
+        };
+        base_mut.hover_event = Some(hover_event);
     }
 
     pub fn literal<S: Into<String>>(string: S) -> Self {

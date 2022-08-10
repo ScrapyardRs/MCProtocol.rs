@@ -5,10 +5,11 @@ use std::io::Cursor;
 pub trait Mappings {
     type PacketType;
 
-    fn attach_to_register<'a, Context>(
-        registry: &mut crate::registry::StateRegistry<'a, Context>,
+    fn attach_to_register<'a, 'b, Context>(
+        registry: &'b mut crate::registry::StateRegistry<'a, Context>,
         handle: crate::registry::StateRegistryHandle<'a, Context>,
-    );
+    ) where
+        'b: 'a;
 
     fn create_packet(
         protocol_version: ProtocolVersion,
@@ -34,8 +35,8 @@ macro_rules! create_mappings {
         impl $crate::mappings::Mappings for $registrar_type {
             type PacketType = $registrar_type;
 
-            fn attach_to_register<'a, Context>(registry: &mut $crate::registry::StateRegistry<'a, Context>, handle: $crate::registry::StateRegistryHandle<'a, Context>) {
-                registry.attach_mappings::<'a, $registrar_type>(handle);
+            fn attach_to_register<'a, 'b, Context>(registry: &'b mut $crate::registry::StateRegistry<'a, Context>, handle: $crate::registry::StateRegistryHandle<'a, Context>)  where 'b: 'a  {
+                registry.attach_mappings::<$registrar_type>(handle);
             }
 
             fn create_packet(_protocol_version: mc_serializer::serde::ProtocolVersion, mut buffer: std::io::Cursor<Vec<u8>>) -> $crate::error::Result<Self::PacketType> {
