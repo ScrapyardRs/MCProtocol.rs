@@ -45,15 +45,24 @@ pub trait PacketBuffer: Send + Sync {
         let mut cursor: Cursor<&[u8]> = Cursor::new(self.decoded().chunk());
 
         if let Ok((size, length)) = VarInt::decode_and_size(&mut cursor) {
+            println!(
+                "Decode successful, {} in buffer, {} required.",
+                self.decoded().len(),
+                (length + size)
+            );
             (length + size) <= self.decoded().len()
         } else {
+            println!("Error or failure?");
             false
         }
     }
 
     fn poll(&mut self) -> PacketBufferFuture<BufferState> {
         Box::pin(async move {
+            println!("Checking availability: {:?}", self.len());
+
             if self.is_packet_available() {
+                println!("Packet available!");
                 return Ok(BufferState::PacketReady);
             }
 
@@ -64,10 +73,13 @@ pub trait PacketBuffer: Send + Sync {
                 }
                 .min(self.decoded().capacity() - self.decoded().len());
 
+            println!("Decoding {}", size_read);
+
             if size_read == 0 {
                 return Ok(if self.is_packet_available() {
                     BufferState::PacketReady
                 } else if self.decoded().capacity() == self.decoded().len() {
+                    println!("Packet too big");
                     log::error!(
                         "Packet too big! Failed at: Capacity {}, length {}",
                         self.decoded().capacity(),
@@ -77,6 +89,7 @@ pub trait PacketBuffer: Send + Sync {
                         "Next packet was too big to decode, something went wrong.",
                     ))
                 } else {
+                    println!("Waiting...");
                     BufferState::Waiting
                 });
             }
