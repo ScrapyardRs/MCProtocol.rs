@@ -92,6 +92,7 @@ pub trait PacketBuffer: Send + Sync {
             }
 
             decoded.put_slice(read_half);
+            log::info!("IN: {}", size_read);
 
             bytes.advance(size_read);
             bytes.reserve(BUFFER_CAPACITY - bytes.len());
@@ -119,6 +120,8 @@ pub trait PacketBuffer: Send + Sync {
                             .next()
                             .unwrap()
                             .to_vec();
+
+                        log::info!("OUT: {} <len: {:?}>", length, self.len());
 
                         self.decoded_mut().advance(length.try_into()?);
                         let len = self.decoded().len();
