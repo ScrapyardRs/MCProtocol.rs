@@ -45,24 +45,15 @@ pub trait PacketBuffer: Send + Sync {
         let mut cursor: Cursor<&[u8]> = Cursor::new(self.decoded().chunk());
 
         if let Ok((size, length)) = VarInt::decode_and_size(&mut cursor) {
-            println!(
-                "Decode successful, {} in buffer, {} required.",
-                self.decoded().len(),
-                (length + size)
-            );
             (length + size) <= self.decoded().len()
         } else {
-            println!("Error or failure?");
             false
         }
     }
 
     fn poll(&mut self) -> PacketBufferFuture<BufferState> {
         Box::pin(async move {
-            println!("Checking availability: {:?}", self.len());
-
             if self.is_packet_available() {
-                println!("Packet available!");
                 return Ok(BufferState::PacketReady);
             }
 
@@ -73,13 +64,10 @@ pub trait PacketBuffer: Send + Sync {
                 }
                 .min(self.decoded().capacity() - self.decoded().len());
 
-            println!("Decoding {}", size_read);
-
             if size_read == 0 {
                 return Ok(if self.is_packet_available() {
                     BufferState::PacketReady
                 } else if self.decoded().capacity() == self.decoded().len() {
-                    println!("Packet too big");
                     log::error!(
                         "Packet too big! Failed at: Capacity {}, length {}",
                         self.decoded().capacity(),
@@ -91,7 +79,6 @@ pub trait PacketBuffer: Send + Sync {
                 } else if self.len() == (0, 0) {
                     BufferState::Error(String::from("Read sink empty."))
                 } else {
-                    println!("Waiting...");
                     BufferState::Waiting
                 });
             }
@@ -120,14 +107,10 @@ pub trait PacketBuffer: Send + Sync {
     fn loop_read(&mut self) -> PacketBufferFuture<Vec<u8>> {
         Box::pin(async move {
             loop {
-                println!("Pollin!");
                 match self.poll().await? {
                     BufferState::PacketReady => {
-                        println!("PACKET READY!");
                         let mut cursor = Cursor::new(self.decoded().chunk());
                         let (length_size, length) = VarInt::decode_and_size(&mut cursor)?;
-
-                        println!("Decoded and sized... {:?}, {:?}", length_size, length);
 
                         self.decoded_mut().advance(length_size.try_into()?);
                         let cursor: Vec<u8> = self
@@ -137,18 +120,14 @@ pub trait PacketBuffer: Send + Sync {
                             .unwrap()
                             .to_vec();
 
-                        println!("Decoding...");
-
                         self.decoded_mut().advance(length.try_into()?);
                         let len = self.decoded().len();
                         self.decoded_mut().reserve(BUFFER_CAPACITY - len);
 
-                        println!("Built cursor :P");
-
                         return Ok(cursor);
                     }
                     BufferState::Error(buffer_error) => anyhow::bail!(buffer_error),
-                    BufferState::Waiting => println!("Buffer Waiting"),
+                    _ => (),
                 }
             }
         })

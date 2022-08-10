@@ -54,24 +54,19 @@ impl<'a, Context> StateRegistry<'a, Context> {
         context: LockedContext<Context>,
         mut packet_buffer: Cursor<Vec<u8>>,
     ) -> anyhow::Result<Option<UnhandledContext>> {
-        println!("Emitting packet.");
         let self_read_lock = arc_self.read().await;
         let protocol_version = self_read_lock.protocol_version;
         let packet_id = VarInt::deserialize(&mut packet_buffer, protocol_version)?;
         let handler = self_read_lock.mappings.get(&packet_id);
-        println!("Checking for handler.");
         if let Some(handler) = handler {
-            println!("Handler found!");
             let handler = Arc::clone(handler);
             drop(self_read_lock);
             (handler)(context, arc_self, protocol_version, packet_buffer).await?;
             Ok(None)
         } else {
             if self_read_lock.fail_on_invalid {
-                println!("Fail on invalid.");
                 anyhow::bail!("Failure to understand packet id {}", packet_id)
             }
-            println!("Returning unhandled context: {:?}, {:?}", packet_id, packet_buffer);
             Ok(Some(UnhandledContext {
                 packet_id,
                 bytes: packet_buffer.into_inner(),
