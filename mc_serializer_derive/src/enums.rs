@@ -20,6 +20,7 @@ pub fn is_default_variant(attributes: &Vec<Attribute>) -> bool {
     for attr in attributes {
         if let Some(segment) = attr.path.segments.first() {
             if segment.ident == "default" {
+                println!("FOUND DEFAULT!");
                 return true;
             }
         }
@@ -65,10 +66,11 @@ impl VariantWrapper {
         }
     }
 
-    fn enum_variant_def(&self) -> TokenStream {
+    fn enum_variant_def(&self, ignore_default: bool) -> TokenStream {
         let fields_variant_def = self.fields.enum_variant_def();
         let self_ident = &self.full_path;
-        if self.is_default {
+        if self.is_default && !ignore_default {
+            println!("Quoting default variant def.");
             quote::quote!(_ =>)
         } else {
             quote::quote!(#self_ident #fields_variant_def =>)
@@ -76,7 +78,7 @@ impl VariantWrapper {
     }
 
     pub fn serializer(&self, passthrough: bool) -> TokenStream {
-        let enum_variant_def = self.enum_variant_def();
+        let enum_variant_def = self.enum_variant_def(true);
         let variant_let_map = self.fields.variant_let_map();
         let serializer_stmt = self.fields.serializer();
         let key_err = self.key_err();
@@ -97,7 +99,7 @@ impl VariantWrapper {
     }
 
     pub fn sizer(&self, passthrough: bool) -> TokenStream {
-        let enum_variant_def = self.enum_variant_def();
+        let enum_variant_def = self.enum_variant_def(true);
         let variant_let_map = self.fields.variant_let_map();
         let sizer_stmt = self.fields.sizer();
         let key_err = self.key_err();
@@ -118,15 +120,22 @@ impl VariantWrapper {
         }
     }
 
-    pub fn deserializer(&self) -> TokenStream {
+    pub fn deserializer_raw(&self) -> TokenStream {
         let self_ident = &self.full_path;
         let variant_make = self.fields.creation_def();
         let deserializer = self.fields.deserializer();
+        quote::quote! {
+            #deserializer
+            return Ok(#self_ident #variant_make)
+        }
+    }
+
+    pub fn deserializer(&self) -> TokenStream {
+        let deserializer = self.deserializer_raw();
         let key = &self.key;
         quote::quote! {
             if key_value == #key {
                 #deserializer
-                return Ok(#self_ident #variant_make)
             }
         }
     }
@@ -142,12 +151,16 @@ pub fn expand_serial_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) -> To
     let mut variant_serializers = Vec::new();
     let mut variant_sizers = Vec::new();
     let mut variant_deserializers = Vec::new();
+    let mut variant_default = Some(quote::quote!(return Err(mc_serializer::serde::Error::Generic(mc_serializer::serde::SerializerContext::new(Self::context(), format!("Failed to read key {:?} as a valid option.", key_value))))));
 
     for variant in &syn_enum.variants {
         let variant_wrapper = VariantWrapper::new(enum_ident, variant);
         variant_serializers.push(variant_wrapper.serializer(passthrough_key));
         variant_sizers.push(variant_wrapper.sizer(passthrough_key));
         variant_deserializers.push(variant_wrapper.deserializer());
+        if variant_wrapper.is_default {
+            variant_default = Some(variant_wrapper.deserializer_raw());
+        }
     }
 
     let key_value_deserializer = if passthrough_key {
@@ -194,7 +207,7 @@ pub fn expand_serial_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) -> To
             ) -> mc_serializer::serde::Result<Self> {
                 #key_value_deserializer
                 #(#variant_deserializers)*
-                return Err(mc_serializer::serde::Error::Generic(Self::base_context()))
+                #variant_default
             }
         }
     }

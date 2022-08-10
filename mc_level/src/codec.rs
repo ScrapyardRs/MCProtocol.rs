@@ -10,6 +10,7 @@ pub enum MonsterSpawnLightLevel {
     Complex {
         #[serde(rename = "type")]
         type_inner: String,
+        #[serde(rename = "value")]
         range: MonsterSpawnLightLevelRange,
     },
     ByteCoverage(i8),

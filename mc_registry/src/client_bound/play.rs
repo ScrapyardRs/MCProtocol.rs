@@ -208,7 +208,7 @@ pub struct UpdateTags {
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct UpdateRecipes {
-    pub recipes: Vec<Recipe>,
+    pub recipes: (VarInt, Vec<Recipe>),
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]

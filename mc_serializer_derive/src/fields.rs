@@ -1,12 +1,12 @@
+use crate::directives::after::AfterDirective;
 use core::default::Default;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::ToTokens;
 use syn::{Attribute, Field, Fields, Type};
-use crate::directives::after::AfterDirective;
 
 pub enum SerialType {
     Default,
-    Nbt,
+    Nbt(bool),
     Json(TokenStream),
 }
 
@@ -29,7 +29,16 @@ impl SerialConfig {
         let segment = attribute.path.segments.last().unwrap();
 
         match segment.ident.to_string().as_str() {
-            "nbt" => self.serial_type = SerialType::Nbt,
+            "nbt" => {
+                self.serial_type = SerialType::Nbt(
+                    attribute
+                        .parse_args::<TokenStream>()
+                        .ok()
+                        .map(|s| s.to_string())
+                        .map(|inner| inner == "inject_header")
+                        .unwrap_or(false),
+                )
+            }
             "json" => {
                 self.serial_type = SerialType::Json(
                     attribute
@@ -51,9 +60,12 @@ impl SerialConfig {
                         .expect("Please provide an expression for the default value."),
                 )
             }
-            "after" => {
-                crate::directives::after::parse_after_directive(&mut self.after_directive, attribute.parse_args().expect("Please provide arguments for the after directive."))
-            }
+            "after" => crate::directives::after::parse_after_directive(
+                &mut self.after_directive,
+                attribute
+                    .parse_args()
+                    .expect("Please provide arguments for the after directive."),
+            ),
             _ => (),
         }
     }
@@ -95,7 +107,12 @@ impl SerialContext {
         }
     }
 
-    pub fn unnamed(field: &Field, field_ident: Ident, index: usize, struct_context: &TokenStream) -> Self {
+    pub fn unnamed(
+        field: &Field,
+        field_ident: Ident,
+        index: usize,
+        struct_context: &TokenStream,
+    ) -> Self {
         Self {
             unnamed: (true, index),
             struct_context: struct_context.to_token_stream(),
@@ -140,7 +157,7 @@ impl SerialContext {
             SerialType::Default => {
                 quote::quote!(mc_serializer::serde::Serialize::serialize(#field_ident, writer, protocol_version))
             }
-            SerialType::Nbt => {
+            SerialType::Nbt(_) => {
                 quote::quote!(mc_serializer::ext::write_nbt(#field_ident, writer, protocol_version))
             }
             SerialType::Json(max_length_tokens) => {
@@ -154,7 +171,7 @@ impl SerialContext {
             Some(operator) => quote::quote! {
                 #short
                 #operator
-            }
+            },
         }
     }
 
@@ -166,7 +183,7 @@ impl SerialContext {
             SerialType::Default => {
                 quote::quote!(size += mc_serializer::serde::Serialize::size(#field_ident, protocol_version))
             }
-            SerialType::Nbt => {
+            SerialType::Nbt(_inject_header) => {
                 quote::quote!(size += mc_serializer::ext::size_nbt(#field_ident, protocol_version))
             }
             SerialType::Json(_) => {
@@ -187,8 +204,12 @@ impl SerialContext {
                 reader,
                 protocol_version
             )),
-            SerialType::Nbt => {
-                quote::quote!(mc_serializer::ext::read_nbt(reader, protocol_version))
+            SerialType::Nbt(inject_header) => {
+                if *inject_header {
+                    quote::quote!(mc_serializer::ext::read_nbt(&mut mc_serializer::ext::insert_fake_nbt_header(reader), protocol_version))
+                } else {
+                    quote::quote!(mc_serializer::ext::read_nbt(reader, protocol_version))
+                }
             }
             SerialType::Json(max_length_tokens) => {
                 quote::quote!(mc_serializer::ext::read_json(#max_length_tokens, reader, protocol_version))
@@ -203,7 +224,8 @@ impl SerialContext {
 
         let ty = &self.ty;
 
-        let tokens = self.marker
+        let tokens = self
+            .marker
             .conditional
             .as_ref()
             .map(|conditional| {
@@ -228,7 +250,7 @@ impl SerialContext {
             Some(operator) => quote::quote! {
                 #tokens
                 #operator
-            }
+            },
         }
     }
 
@@ -285,7 +307,12 @@ impl FieldsWrapper {
                 for (index, field) in unnamed.unnamed.iter().enumerate() {
                     let field_ident =
                         Ident::new(format!("tuple_v{}", index).as_str(), Span::call_site());
-                    serial_fields.push(SerialContext::unnamed(field, field_ident, index, &struct_context))
+                    serial_fields.push(SerialContext::unnamed(
+                        field,
+                        field_ident,
+                        index,
+                        &struct_context,
+                    ))
                 }
             }
             Fields::Unit => {

@@ -5,10 +5,13 @@ use crate::serde::{
 };
 use crate::{wrap_indexed_struct_context, wrap_struct_context};
 use bytes::Buf;
+use cesu8::{to_cesu8, to_java_cesu8};
+use mc_level::codec::Codec;
+use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::io::{Cursor, Read, Write};
-use mc_level::codec::Codec;
+use std::io::{Cursor, ErrorKind, Read, Write};
+use std::mem::MaybeUninit;
 
 impl<T: Contextual> Contextual for (VarInt, Vec<T>) {
     fn context() -> String {
@@ -229,7 +232,7 @@ where
 {
     let value_to_string = serde_json::to_string(value)
         .map_err(|err| Error::SerdeJsonError(err, T::base_context()))?;
-    write_string::<T, W>(max_length, &value_to_string, writer, protocol_version)
+    write_string::<W>(max_length, &value_to_string, writer, protocol_version)
 }
 
 pub fn size_json<T>(value: &T, protocol_version: ProtocolVersion) -> Result<i32>
@@ -249,7 +252,7 @@ pub fn read_json<T, R: Read>(
 where
     T: Contextual + for<'de> serde::de::Deserialize<'de>,
 {
-    let json_string = read_string::<T, R>(max_length, reader, protocol_version)?;
+    let json_string = read_string::<R>(max_length, reader, protocol_version)?;
     serde_json::from_slice(json_string.as_bytes())
         .map_err(|err| Error::SerdeJsonError(err, T::base_context()))
 }
@@ -280,6 +283,101 @@ where
 impl<K: Contextual, V: Contextual> Contextual for HashMap<K, V> {
     fn context() -> String {
         format!("HashMap<{}, {}>", K::context(), V::context())
+    }
+}
+
+pub struct FakeNbtHeaderInserter<R: Read> {
+    skip_state: (usize, usize),
+    inner: R,
+    prepped_tag_type: u8,
+}
+
+impl<R: Read> Read for FakeNbtHeaderInserter<R> {
+    fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize> {
+        match self.skip_state {
+            (0, _) => {
+                // write initial compound tag byte
+                let written = buf.write(&[0x0a])?;
+                if written == 1 {
+                    self.skip_state = (1, 0);
+                }
+                Ok(written)
+            }
+            (1, mut cursor) => {
+                // write root tag string length
+                const WRITE_BYTES: [u8; 2] = [0, 9];
+                const TO_WRITE: usize = WRITE_BYTES.len();
+                let written = buf.write(&WRITE_BYTES[cursor..])?;
+                cursor += written;
+                if cursor == TO_WRITE {
+                    self.skip_state = (2, 0);
+                }
+                Ok(written)
+            }
+            (2, mut cursor) => {
+                // write root tag string
+                const WRITE_BYTES: [u8; 9] = [102, 97, 107, 101, 95, 114, 111, 111, 116];
+                const TO_WRITE: usize = WRITE_BYTES.len();
+                let written = buf.write(&WRITE_BYTES[cursor..])?;
+                cursor += written;
+                if cursor == TO_WRITE {
+                    self.skip_state = (3, 0);
+                }
+                Ok(written)
+            }
+            (3, _) => {
+                // process intended tag type
+                let mut read_in = [0u8; 1];
+                let read_in_size = self.inner.read(&mut read_in)?;
+                if read_in_size == 1 {
+                    self.prepped_tag_type = read_in[0];
+
+                    if self.prepped_tag_type == 0x00 {
+                        buf.write(&[0x00])
+                    } else if self.prepped_tag_type != 0xA {
+                        Err(std::io::Error::new(
+                            ErrorKind::InvalidData,
+                            format!("Invalid prepped tag type: {}", self.prepped_tag_type),
+                        ))
+                    } else {
+                        // read in a string
+                        let mut len_buf = [0u8; 2];
+                        let written = self.inner.read(&mut len_buf)?;
+                        match written {
+                            0 => return Ok(0),
+                            1 => panic!("Invalid read, unframed."),
+                            _ => (),
+                        };
+                        let len = u16::from_be_bytes(len_buf) as usize;
+                        let mut len_buf = vec![0u8; len];
+                        let written = self.inner.read(&mut len_buf)?;
+                        match written {
+                            x if x == 0 && x != len => return Ok(0),
+                            x if x == len => (),
+                            _ => panic!("Invalid read, unframed."),
+                        };
+
+                        self.skip_state = (4, 0);
+                        self.read(buf)
+                    }
+                } else {
+                    Ok(0)
+                }
+            }
+            (4, _) => {
+                // free spin
+                self.inner.read(buf)
+            }
+            (_, _) => panic!("Invalid skip state"),
+        }
+    }
+}
+
+pub fn insert_fake_nbt_header<R: Read>(reader: R) -> FakeNbtHeaderInserter<R> {
+    FakeNbtHeaderInserter {
+        skip_state: (0, 0),
+        inner: reader,
+        prepped_tag_type: 0,
     }
 }
 
@@ -361,8 +459,60 @@ impl<K: Contextual + Deserialize + Hash + Eq, V: Contextual + Deserialize> Deser
     }
 }
 
+impl<T: Contextual> Contextual for Box<T> {
+    fn context() -> String {
+        format!("Box<{}>", T::context())
+    }
+}
+
+impl<T: Serialize> Serialize for Box<T> {
+    fn serialize<W: Write>(&self, writer: &mut W, protocol_version: ProtocolVersion) -> Result<()> {
+        T::serialize(self, writer, protocol_version)
+    }
+
+    fn size(&self, protocol_version: ProtocolVersion) -> Result<i32> {
+        T::size(self, protocol_version)
+    }
+}
+
+impl<T: Deserialize> Deserialize for Box<T> {
+    fn deserialize<R: Read>(reader: &mut R, protocol_version: ProtocolVersion) -> Result<Self> {
+        T::deserialize(reader, protocol_version).map(Box::new)
+    }
+}
+
 impl Contextual for Codec {
     fn context() -> String {
         "Codec".to_string()
     }
 }
+
+macro_rules! context {
+    ($ty:ty) => {
+        impl Contextual for $ty {
+            fn context() -> String {
+                format!("{}", stringify!($ty))
+            }
+        }
+    };
+}
+
+context!(String);
+
+impl Deserialize for String {
+    fn deserialize<R: Read>(reader: &mut R, protocol_version: ProtocolVersion) -> Result<Self> {
+        read_string::<R>(32767, reader, protocol_version)
+    }
+}
+
+impl Serialize for String {
+    fn serialize<W: Write>(&self, writer: &mut W, protocol_version: ProtocolVersion) -> Result<()> {
+        write_string::<W>(32767, &self.to_string(), writer, protocol_version)
+    }
+
+    fn size(&self, protocol_version: ProtocolVersion) -> Result<i32> {
+        size_string::<Self>(&self.to_string(), protocol_version)
+    }
+}
+
+context!(nbt::Value);

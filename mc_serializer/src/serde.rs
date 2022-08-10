@@ -70,6 +70,10 @@ impl SerializerContext {
     /// }
     /// ```
     pub fn current_field(&mut self, current_field: String) -> &mut Self {
+        if self.current_field.is_some() {
+            self.current_field = self.current_field.as_ref().map(move |current| format!("{}, {}", current_field, current));
+            return self;
+        }
         self.current_field = Some(current_field);
         self
     }
@@ -97,6 +101,10 @@ impl SerializerContext {
     /// }
     /// ```
     pub fn current_struct(&mut self, current_struct: String) -> &mut Self {
+        if self.current_struct.is_some() {
+            self.current_struct = self.current_struct.as_ref().map(move |current| format!("{} => {}", current_struct, current));
+            return self;
+        }
         self.current_struct = Some(current_struct);
         self
     }
@@ -407,8 +415,5 @@ macro_rules! contextual {
                 format!("{}", stringify!($obj))
             }
         }
-    }
+    };
 }
-
-contextual!(&str);
-contextual!(String);

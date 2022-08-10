@@ -6,17 +6,23 @@ use mc_serializer::serde::{
 };
 use mc_serializer::wrap_indexed_struct_context;
 use mc_serializer::wrap_struct_context;
+use nbt::Value;
 use std::io::{Read, Write};
+use std::iter::Map;
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Ingredient {
-    ingredients: Vec<ItemStackContainer>,
+    ingredients: (VarInt, Vec<ItemStackContainer>),
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct ItemStack {
     pub item_id: VarInt,
     pub count: u8,
+    #[nbt(inject_header)]
+    #[after(de {
+        println!("Read complete item tag. {:?}", wrap_struct_context!("tag_json", serde_json::to_string_pretty(&__serde_item_tag).map_err(|err| mc_serializer::serde::Error::SerdeJsonError(err, Self::base_context())))?);
+    })]
     pub item_tag: nbt::Blob,
 }
 
@@ -78,6 +84,14 @@ impl Deserialize for ShapedRecipeSerializer {
         reader: &mut R,
         protocol_version: ProtocolVersion,
     ) -> mc_serializer::serde::Result<Self> {
+        let resource_location = wrap_struct_context!(
+            "what_is_this",
+            ResourceLocation::deserialize(reader, protocol_version)
+        )?;
+        println!(
+            "Resource Location For Recipe Internal: {}",
+            resource_location
+        );
         let width = wrap_struct_context!("width", VarInt::deserialize(reader, protocol_version))?;
         let height =
             wrap_struct_context!("height", Deserialize::deserialize(reader, protocol_version))?;
@@ -121,6 +135,7 @@ impl Deserialize for ShapedRecipeSerializer {
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct SimpleCookingRecipeBase {
+    identifier: Identifier,
     pub group: Identifier,
     pub ingredient: Ingredient,
     pub item_stack: ItemStackContainer,
@@ -131,75 +146,76 @@ pub struct SimpleCookingRecipeBase {
 #[derive(mc_serializer_derive::Serial, Debug)]
 #[key(ResourceLocation)]
 pub enum CraftingRecipe {
-    #[key(ResourceLocation::from("crafting_shaped"))]
+    #[key(ResourceLocation::from("minecraft:crafting_shaped"))]
     ShapedRecipe(ShapedRecipeSerializer),
-    #[key(ResourceLocation::from("crafting_shapeless"))]
+    #[key(ResourceLocation::from("minecraft:crafting_shapeless"))]
     ShapelessRecipe {
         group: Identifier,
         ingredients: (VarInt, Vec<Ingredient>),
         result: ItemStackContainer,
     },
-    #[key(ResourceLocation::from("crafting_special_armordye"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_armordye"))]
     ArmorDye,
-    #[key(ResourceLocation::from("crafting_special_bookcloning"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_bookcloning"))]
     BookCloning,
-    #[key(ResourceLocation::from("crafting_special_mapcloning"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_mapcloning"))]
     MapCloning,
-    #[key(ResourceLocation::from("crafting_special_mapextending"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_mapextending"))]
     MapExtending,
-    #[key(ResourceLocation::from("crafting_special_firework_rocket"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_firework_rocket"))]
     FireworkRocket,
-    #[key(ResourceLocation::from("crafting_special_firework_star"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_firework_star"))]
     FireworkStar,
-    #[key(ResourceLocation::from("crafting_special_firework_star_fade"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_firework_star_fade"))]
     FireworkStarFade,
-    #[key(ResourceLocation::from("crafting_special_tippedarrow"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_tippedarrow"))]
     TippedArrow,
-    #[key(ResourceLocation::from("crafting_special_bannerduplicate"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_bannerduplicate"))]
     BannerDuplicate,
-    #[key(ResourceLocation::from("crafting_special_shielddecoration"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_shielddecoration"))]
     ShieldDecoration,
-    #[key(ResourceLocation::from("crafting_special_shulkerboxcoloring"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_shulkerboxcoloring"))]
     ShulkerBoxColoring,
-    #[key(ResourceLocation::from("crafting_special_suspiciousstew"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_suspiciousstew"))]
     SuspiciousStew,
-    #[key(ResourceLocation::from("crafting_special_repairitem"))]
+    #[key(ResourceLocation::from("minecraft:crafting_special_repairitem"))]
     RepairItem,
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 #[key(ResourceLocation)]
 pub enum SmeltingRecipe {
-    #[key(ResourceLocation::from("smelting"))]
+    #[key(ResourceLocation::from("minecraft:smelting"))]
     SmeltingRecipe(SimpleCookingRecipeBase),
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 #[key(ResourceLocation)]
 pub enum BlastingRecipe {
-    #[key(ResourceLocation::from("blasting"))]
+    #[key(ResourceLocation::from("minecraft:blasting"))]
     BlastingRecipe(SimpleCookingRecipeBase),
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 #[key(ResourceLocation)]
 pub enum SmokingRecipe {
-    #[key(ResourceLocation::from("smoking"))]
+    #[key(ResourceLocation::from("minecraft:smoking"))]
     SmokingRecipe(SimpleCookingRecipeBase),
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 #[key(ResourceLocation)]
 pub enum CampfireCookingRecipe {
-    #[key(ResourceLocation::from("campfire_cooking"))]
+    #[key(ResourceLocation::from("minecraft:campfire_cooking"))]
     CampfireCookingRecipe(SimpleCookingRecipeBase),
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 #[key(ResourceLocation)]
 pub enum StonecutterRecipe {
-    #[key(ResourceLocation::from("stonecutting"))]
+    #[key(ResourceLocation::from("minecraft:stonecutting"))]
     StoneCutterRecipe {
+        identifier: Identifier,
         group: Identifier,
         ingredient: Ingredient,
         result: ItemStackContainer,
@@ -209,8 +225,9 @@ pub enum StonecutterRecipe {
 #[derive(mc_serializer_derive::Serial, Debug)]
 #[key(ResourceLocation)]
 pub enum UpgradeRecipe {
-    #[key(ResourceLocation::from("smithing"))]
+    #[key(ResourceLocation::from("minecraft:smithing"))]
     SmithingRecipe {
+        identifier: Identifier,
         ingredient_1: Ingredient,
         ingredient_2: Ingredient,
         result: ItemStackContainer,
@@ -220,21 +237,79 @@ pub enum UpgradeRecipe {
 #[derive(mc_serializer_derive::Serial, Debug)]
 #[key(ResourceLocation)]
 pub enum Recipe {
-    #[key(ResourceLocation::from("crafting"))]
-    CraftingRecipe(CraftingRecipe),
-    #[key(ResourceLocation::from("smelting"))]
-    SmeltingRecipe(SmeltingRecipe),
-    #[key(ResourceLocation::from("blasting"))]
-    BlastingRecipe(BlastingRecipe),
-    #[key(ResourceLocation::from("smoking"))]
-    SmokingRecipe(SmokingRecipe),
-    #[key(ResourceLocation::from("campfire_cooking"))]
-    CampfireCookingRecipe(CampfireCookingRecipe),
-    #[key(ResourceLocation::from("stonecutting"))]
-    StonecutterRecipe(StonecutterRecipe),
-    #[key(ResourceLocation::from("smithing"))]
-    UpgradeRecipe(UpgradeRecipe),
+    #[key(ResourceLocation::from("minecraft:crafting_shaped"))]
+    ShapedRecipe(ShapedRecipeSerializer),
+    #[key(ResourceLocation::from("minecraft:crafting_shapeless"))]
+    ShapelessRecipe {
+        identifier: Identifier,
+        group: Identifier,
+        ingredients: (VarInt, Vec<Ingredient>),
+        result: ItemStackContainer,
+    },
+    #[key(ResourceLocation::from("minecraft:crafting_special_armordye"))]
+    ArmorDye,
+    #[key(ResourceLocation::from("minecraft:crafting_special_bookcloning"))]
+    BookCloning,
+    #[key(ResourceLocation::from("minecraft:crafting_special_mapcloning"))]
+    MapCloning,
+    #[key(ResourceLocation::from("minecraft:crafting_special_mapextending"))]
+    MapExtending,
+    #[key(ResourceLocation::from("minecraft:crafting_special_firework_rocket"))]
+    FireworkRocket,
+    #[key(ResourceLocation::from("minecraft:crafting_special_firework_star"))]
+    FireworkStar,
+    #[key(ResourceLocation::from("minecraft:crafting_special_firework_star_fade"))]
+    FireworkStarFade,
+    #[key(ResourceLocation::from("minecraft:crafting_special_tippedarrow"))]
+    TippedArrow,
+    #[key(ResourceLocation::from("minecraft:crafting_special_bannerduplicate"))]
+    BannerDuplicate,
+    #[key(ResourceLocation::from("minecraft:crafting_special_shielddecoration"))]
+    ShieldDecoration,
+    #[key(ResourceLocation::from("minecraft:crafting_special_shulkerboxcoloring"))]
+    ShulkerBoxColoring,
+    #[key(ResourceLocation::from("minecraft:crafting_special_suspiciousstew"))]
+    SuspiciousStew,
+    #[key(ResourceLocation::from("minecraft:crafting_special_repairitem"))]
+    RepairItem,
+    #[key(ResourceLocation::from("minecraft:smelting"))]
+    SmeltingRecipe(SimpleCookingRecipeBase),
+    #[key(ResourceLocation::from("minecraft:blasting"))]
+    BlastingRecipe(SimpleCookingRecipeBase),
+    #[key(ResourceLocation::from("minecraft:smoking"))]
+    SmokingRecipe(SimpleCookingRecipeBase),
+    #[key(ResourceLocation::from("minecraft:campfire_cooking"))]
+    CampfireCookingRecipe(SimpleCookingRecipeBase),
+    #[key(ResourceLocation::from("minecraft:stonecutting"))]
+    StoneCutterRecipe {
+        identifier: Identifier,
+        group: Identifier,
+        ingredient: Ingredient,
+        result: ItemStackContainer,
+    },
+    #[key(ResourceLocation::from("minecraft:smithing"))]
+    SmithingRecipe {
+        identifier: Identifier,
+        ingredient_1: Ingredient,
+        ingredient_2: Ingredient,
+        result: ItemStackContainer,
+    },
+    #[default]
+    #[key(ResourceLocation::from("unknown"))]
+    Custom(Box<Recipe>),
 }
+
+// #[derive(mc_serializer_derive::Serial, Debug)]
+// #[key(ResourceLocation)]
+// pub enum Recipe {
+//     CraftingRecipe(CraftingRecipe),
+//     SmeltingRecipe(SmeltingRecipe),
+//     BlastingRecipe(BlastingRecipe),
+//     SmokingRecipe(SmokingRecipe),
+//     CampfireCookingRecipe(CampfireCookingRecipe),
+//     StonecutterRecipe(StonecutterRecipe),
+//     UpgradeRecipe(UpgradeRecipe),
+// }
 
 auto_string!(ResourceLocation, 32767);
 

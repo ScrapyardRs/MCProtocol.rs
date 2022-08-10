@@ -4,7 +4,10 @@ use mc_buffer::buffer::{OwnedPacketBuffer, PacketBuffer};
 use mc_buffer::encryption::{Compressor, Encrypt};
 use mc_chat::Chat;
 use mc_registry::client_bound::login::{LoginSuccess, SetCompression};
-use mc_registry::client_bound::play::{JoinGame, Ping};
+use mc_registry::client_bound::play::{
+    ChangeDifficulty, JoinGame, Ping, PlayerAbilities, PluginMessage, SetCarriedItem,
+    UpdateRecipes, UpdateTags,
+};
 use mc_registry::mappings::Mappings;
 use mc_registry::registry::{
     arc_lock, LockedContext, LockedStateRegistry, StateRegistry, UnhandledContext,
@@ -13,14 +16,17 @@ use mc_registry::server_bound::handshaking::{Handshake, NextState, ServerAddress
 use mc_registry::server_bound::login::LoginStart;
 use mc_registry::server_bound::play::Pong;
 use mc_registry::shared_types::login::LoginUsername;
+use mc_registry::shared_types::play::ResourceLocation;
+use mc_serializer::ext::write_nbt;
+use mc_serializer::primitive::{read_string, Identifier};
 use mc_serializer::serde::ProtocolVersion;
 use std::io::Cursor;
+use std::process::exit;
 use std::sync::Arc;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::tcp::WriteHalf;
 use tokio::net::TcpStream;
-use mc_serializer::ext::write_nbt;
 
 struct Test {
     owned_write: OwnedWriteHalf,
@@ -90,6 +96,12 @@ fn handle_login_success(
     lock.clear_mappings();
     JoinGame::attach_to_register(&mut lock, handle_join_game);
     Ping::attach_to_register(&mut lock, handle_ping);
+    PluginMessage::attach_to_register(&mut lock, handle_plugin_message);
+    ChangeDifficulty::attach_to_register(&mut lock, handle_change_difficult);
+    PlayerAbilities::attach_to_register(&mut lock, handle_player_abilities);
+    SetCarriedItem::attach_to_register(&mut lock, handle_set_carried_item);
+    UpdateRecipes::attach_to_register(&mut lock, handle_update_recipes);
+    UpdateTags::attach_to_register(&mut lock, handle_update_tags);
 }
 
 #[mc_registry_derive::packet_handler]
@@ -101,7 +113,47 @@ fn handle_set_compression(packet: SetCompression, _context: LockedContext<Test>)
 fn handle_join_game(packet: JoinGame, _context: LockedContext<Test>) {
     let mut bytes = Vec::new();
     write_nbt(&packet.codec, &mut bytes, ProtocolVersion::V119_1)?;
-    println!("Packet: {:#?}", packet);
+    println!("Join Game: {:#?}", packet);
+}
+
+#[mc_registry_derive::packet_handler]
+fn handle_plugin_message(packet: PluginMessage, _context: LockedContext<Test>) {
+    if packet.identifier == ResourceLocation::from("minecraft:brand") {
+        let mut cursor = Cursor::new(packet.data);
+        let brand = read_string(32767, &mut cursor, ProtocolVersion::V119_1)?;
+        println!("Brand: {}", brand);
+    } else {
+        println!("Custom Payload {}: {:#?}", packet.identifier, packet.data);
+    }
+}
+
+#[mc_registry_derive::packet_handler]
+fn handle_change_difficult(packet: ChangeDifficulty, _context: LockedContext<Test>) {
+    println!("Change difficulty: {:#?}", packet);
+}
+
+#[mc_registry_derive::packet_handler]
+fn handle_player_abilities(packet: PlayerAbilities, _context: LockedContext<Test>) {
+    println!("Player Abilities: {:#?}", packet);
+}
+
+#[mc_registry_derive::packet_handler]
+fn handle_set_carried_item(packet: SetCarriedItem, _context: LockedContext<Test>) {
+    println!("Set Carried Item: {:#?}", packet);
+}
+
+#[mc_registry_derive::packet_handler]
+fn handle_update_recipes(packet: UpdateRecipes, _context: LockedContext<Test>) {
+    // println!("Update Recipes: {:#?}", packet);
+    println!("Example Recipe: {:#?}", packet.recipes.1.first().unwrap());
+}
+
+#[allow(unreachable_code)]
+#[mc_registry_derive::packet_handler]
+fn handle_update_tags(packet: UpdateTags, _context: LockedContext<Test>) {
+    // println!("Update Tags: {:#?}", packet);
+    println!("Done.");
+    exit(0);
 }
 
 #[mc_registry_derive::packet_handler]
