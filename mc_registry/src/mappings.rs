@@ -35,7 +35,7 @@ macro_rules! create_mappings {
         impl $crate::mappings::Mappings for $registrar_type {
             type PacketType = $registrar_type;
 
-            fn attach_to_register<'a, 'b, Context>(registry: &'b mut $crate::registry::StateRegistry<'a, Context>, handle: $crate::registry::StateRegistryHandle<'a, Context>)  where 'b: 'a  {
+            fn attach_to_register<'a, 'b, Context>(registry: &'b mut $crate::registry::StateRegistry<'a, Context>, handle: $crate::registry::StateRegistryHandle<'a, Context>)  where 'a: 'b  {
                 registry.attach_mappings::<$registrar_type>(handle);
             }
 
