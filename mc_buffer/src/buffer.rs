@@ -88,6 +88,8 @@ pub trait PacketBuffer: Send + Sync {
                     BufferState::Error(String::from(
                         "Next packet was too big to decode, something went wrong.",
                     ))
+                } else if self.len() == (0, 0) {
+                    BufferState::Error(String::from("Read sink empty."))
                 } else {
                     println!("Waiting...");
                     BufferState::Waiting
