@@ -125,11 +125,11 @@ pub trait PacketBuffer: Send + Sync {
                             .unwrap()
                             .to_vec();
 
-                        log::info!("OUT: {} <len: {:?}>", length, self.len());
-
                         self.decoded_mut().advance(length.try_into()?);
                         let len = self.decoded().len();
                         self.decoded_mut().reserve(BUFFER_CAPACITY - len);
+
+                        log::info!("OUT: {} <len: {:?}>", length + length_size, self.len());
 
                         return Ok(cursor);
                     }
@@ -206,13 +206,13 @@ impl<'a> BorrowedPacketBuffer<'a> {
     }
 
     pub fn transport(self) -> BufferTransport {
+        print!("{:?} == ", (self.len()));
         let BorrowedPacketBuffer {
             bytes,
             decoded,
             decryption,
             ..
         } = self;
-        print!("{:?} ==", (bytes.len(), decoded.len()));
         let transport = BufferTransport {
             bytes,
             decoded,
@@ -238,7 +238,7 @@ impl OwnedPacketBuffer {
     }
 
     pub fn transport(self) -> BufferTransport {
-        print!("{:?} ==", (self.len()));
+        print!("{:?} == ", (self.len()));
         let OwnedPacketBuffer {
             bytes,
             decoded,
