@@ -341,9 +341,9 @@ impl PacketWriter for OwnedPacketWriter {
 }
 
 impl OwnedPacketWriter {
-    pub fn new(write_half: OwnedWriteHalf, protocol_version: ProtocolVersion) -> Self {
+    pub fn new(write_half: OwnedWriteHalf) -> Self {
         Self {
-            protocol_version,
+            protocol_version: ProtocolVersion::Handshake,
             write_half,
             decryption: None,
             compressor: None,
@@ -360,5 +360,21 @@ impl OwnedPacketWriter {
 
     pub fn borrow_buffer(&mut self) -> BorrowedPacketWriter {
         BorrowedPacketWriter { owned_ref: self }
+    }
+
+    pub fn update_protocol_version(&mut self, new_protocol_version: ProtocolVersion) {
+        self.protocol_version = new_protocol_version;
+    }
+}
+
+impl From<OwnedReadHalf> for OwnedPacketReader {
+    fn from(read: OwnedReadHalf) -> Self {
+        Self::new(read)
+    }
+}
+
+impl From<OwnedWriteHalf> for OwnedPacketWriter {
+    fn from(write: OwnedWriteHalf) -> Self {
+        Self::new(write)
     }
 }
