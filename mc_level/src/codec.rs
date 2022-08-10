@@ -1,7 +1,7 @@
 #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
 pub struct MonsterSpawnLightLevelRange {
-    max_inclusive: i8,
-    min_inclusive: i8,
+    pub max_inclusive: i8,
+    pub min_inclusive: i8,
 }
 
 #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
