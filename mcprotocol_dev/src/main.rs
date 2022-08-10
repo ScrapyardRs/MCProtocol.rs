@@ -101,7 +101,7 @@ fn handle_set_compression(packet: SetCompression, _context: LockedContext<Test>)
 fn handle_join_game(packet: JoinGame, _context: LockedContext<Test>) {
     let mut bytes = Vec::new();
     write_nbt(&packet.codec, &mut bytes, ProtocolVersion::V119_1)?;
-    println!("Bytes: {:?}", bytes);
+    println!("Packet: {:#?}", packet);
 }
 
 #[mc_registry_derive::packet_handler]

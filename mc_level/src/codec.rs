@@ -1,5 +1,5 @@
 #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
-pub struct Value {
+pub struct MonsterSpawnLightLevelRange {
     max_inclusive: i8,
     min_inclusive: i8,
 }
@@ -10,7 +10,7 @@ pub enum MonsterSpawnLightLevel {
     Complex {
         #[serde(rename = "type")]
         type_inner: String,
-        value: Value,
+        range: MonsterSpawnLightLevelRange,
     },
     ByteCoverage(i8),
 }
