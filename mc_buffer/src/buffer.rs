@@ -37,6 +37,10 @@ pub trait PacketBuffer: Send + Sync {
         (self.bytes().len(), self.decoded().len())
     }
 
+    fn capacity(&self) -> (usize, usize) {
+        (self.bytes().remaining(), self.decoded().remaining())
+    }
+
     fn is_empty(&self) -> bool {
         self.bytes().is_empty() && self.decoded().is_empty()
     }
