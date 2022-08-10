@@ -271,22 +271,30 @@ pub struct Disconnect {
     pub reason: Chat,
 }
 
-
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Ping {
     pub id: i32,
 }
 
 crate::create_mappings! {
-    Disconnect {
-        def 0x19;
-    }
-
-    JoinGame {
-        def 0x25;
-    }
-
-    Ping {
-        def 0x2F;
-    }
+    BlockEntityInfo { def 0x7; }
+    ChangeDifficulty { def 0xB; }
+    DeclareCommands { def 0xF; }
+    PluginMessage { def 0x16; }
+    Disconnect { def 0x19; }
+    EntityEvent { def 0x1A; }
+    WorldBorder { def 0x1F; }
+    LevelChunkWithLight { def 0x21; }
+    LightUpdate { def 0x24; }
+    JoinGame { def 0x25; }
+    Ping { def 0x2F; }
+    PlayerAbilities { def 0x31; }
+    PlayerInfo { def 0x37; }
+    PlayerPosition { def 0x39; }
+    DeclareRecipes { def 0x3A; }
+    SetCarriedItem { def 0x4A; }
+    SetChunkCacheCenter { def 0x4B; }
+    SetDefaultSpawnPosition { def 0x4D; }
+    UpdateRecipes { def 0x6A; }
+    UpdateTags { def 0x6B; }
 }

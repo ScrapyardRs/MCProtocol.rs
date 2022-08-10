@@ -88,7 +88,13 @@ pub struct Pong {
 }
 
 crate::create_mappings! {
-    Pong {
-        def 0x20;
-    }
+    AcceptTeleportation { def 0x0; }
+    ClientCommand { def 0x7; }
+    ClientInformation { def 0x8; }
+    PluginMessage { def 0xD; }
+    MovePlayerPos { def 0x14; }
+    MovePlayerPosRot { def 0x15; }
+    MovePlayerRot { def 0x16; }
+    MovePlayerStatus { def 0x17; }
+    Pong { def 0x20; }
 }
