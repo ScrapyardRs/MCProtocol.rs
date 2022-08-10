@@ -57,6 +57,7 @@ pub trait PacketBuffer: Send + Sync {
 
     fn poll(&mut self) -> PacketBufferFuture<BufferState> {
         Box::pin(async move {
+            println!("POLL BEGIN");
             if self.is_packet_available() {
                 return Ok(BufferState::PacketReady);
             }
@@ -67,6 +68,8 @@ pub trait PacketBuffer: Send + Sync {
                     Err(_) => return Ok(BufferState::Error(String::from("Client read timeout."))),
                 }
                 .min(self.decoded().capacity() - self.decoded().len());
+
+            println!("POLL END {}", size_read);
 
             if size_read == 0 {
                 return Ok(if self.is_packet_available() {
@@ -110,10 +113,13 @@ pub trait PacketBuffer: Send + Sync {
     }
 
     fn loop_read(&mut self) -> PacketBufferFuture<Vec<u8>> {
+        println!("Create loop read future.");
         Box::pin(async move {
+            println!("Inner loop read future");
             loop {
                 match self.poll().await? {
                     BufferState::PacketReady => {
+                        println!("PACKET READY!");
                         let mut cursor = Cursor::new(self.decoded().chunk());
                         let (length_size, length) = VarInt::decode_and_size(&mut cursor)?;
 
