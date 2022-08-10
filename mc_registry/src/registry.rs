@@ -36,12 +36,12 @@ pub struct UnhandledContext {
 }
 
 impl<'a, Context> StateRegistry<'a, Context> {
-    pub fn attach_mappings<'aa, MappingsType: Mappings>(
-        &'aa mut self,
+    pub fn attach_mappings<MappingsType: Mappings>(
+        &mut self,
         handle: StateRegistryHandle<'a, Context>,
-    ) where 'a: 'aa {
+    ) {
         if let Ok(id) = MappingsType::retrieve_packet_id(self.protocol_version) {
-            self.mappings.insert(id, Arc::new(handle));
+            drop(self.mappings.insert(id, Arc::new(handle)));
         }
     }
 
