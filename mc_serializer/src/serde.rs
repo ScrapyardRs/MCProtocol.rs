@@ -401,11 +401,14 @@ macro_rules! wrap_indexed_struct_context {
 
 #[macro_export]
 macro_rules! contextual {
-    ($obj:ident) => {
-        impl mc_serializer::serde::Contextual for $obj {
+    ($obj:ty) => {
+        impl $crate::serde::Contextual for $obj {
             fn context() -> String {
                 format!("{}", stringify!($obj))
             }
         }
     }
 }
+
+contextual!(&str);
+contextual!(String);
