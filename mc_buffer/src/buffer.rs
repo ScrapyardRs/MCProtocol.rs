@@ -210,6 +210,10 @@ impl<'a> BorrowedPacketBuffer<'a> {
 }
 
 impl OwnedPacketBuffer {
+    pub fn enable_decryption(&mut self, codec: crate::encryption::Codec) {
+        self.decryption = Some(Decrypt::new(codec));
+    }
+
     pub fn transport(self) -> BufferTransport {
         let OwnedPacketBuffer {
             bytes,
