@@ -249,14 +249,15 @@ pub struct JoinGame {
     pub hardcore: bool,
     pub game_type: GameType,
     pub previous_game_type: GameType,
-    pub levels: Vec<ResourceLocation>,
-    pub codec: nbt::Blob,
+    pub levels: (VarInt, Vec<ResourceLocation>),
+    #[nbt]
+    pub codec: mc_level::codec::Codec,
     pub dimension_type: ResourceLocation,
     pub dimension: ResourceLocation,
     pub seed: u64,
-    pub max_players: i32,
-    pub chunk_radius: i32,
-    pub simulation_distance: i32,
+    pub max_players: VarInt,
+    pub chunk_radius: VarInt,
+    pub simulation_distance: VarInt,
     pub reduced_debug_info: bool,
     pub show_death_screen: bool,
     pub is_debug: bool,
@@ -270,8 +271,22 @@ pub struct Disconnect {
     pub reason: Chat,
 }
 
+
+#[derive(mc_serializer_derive::Serial, Debug)]
+pub struct Ping {
+    pub id: i32,
+}
+
 crate::create_mappings! {
     Disconnect {
         def 0x19;
+    }
+
+    JoinGame {
+        def 0x25;
+    }
+
+    Ping {
+        def 0x2F;
     }
 }

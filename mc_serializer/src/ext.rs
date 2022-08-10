@@ -8,6 +8,7 @@ use bytes::Buf;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::io::{Cursor, Read, Write};
+use mc_level::codec::Codec;
 
 impl<T: Contextual> Contextual for (VarInt, Vec<T>) {
     fn context() -> String {
@@ -357,5 +358,11 @@ impl<K: Contextual + Deserialize + Hash + Eq, V: Contextual + Deserialize> Deser
             );
         }
         Ok(map)
+    }
+}
+
+impl Contextual for Codec {
+    fn context() -> String {
+        "Codec".to_string()
     }
 }

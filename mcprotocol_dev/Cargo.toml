@@ -11,6 +11,9 @@ mc_serializer_derive = { path = "../mc_serializer_derive", version = "0.1.0" }
 mc_registry = { path = "../mc_registry", version = "0.1.0" }
 mc_registry_derive = { path = "../mc_registry_derive", version = "0.1.0" }
 mc_buffer = { path = "../mc_buffer", version = "0.1.0" }
+mc_chat = { path = "../mc_chat", version = "0.1.0" }
 serde_derive = "1.0.140"
 serde = "1.0.140"
 bytes = "1.2.1"
+futures = "0.3.21"
+serde_json = "1.0.83"

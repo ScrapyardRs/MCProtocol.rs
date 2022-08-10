@@ -1,5 +1,5 @@
-use mc_serializer::primitive::{Identifier, VarInt};
 use crate::shared_types::play::ResourceLocation;
+use mc_serializer::primitive::{Identifier, VarInt};
 use mc_serializer::serde::Contextual;
 
 #[derive(mc_serializer_derive::Serial, Debug)]
@@ -80,4 +80,15 @@ pub enum ClientCommand {
     PerformRespawn,
     #[key(VarInt::from(1))]
     RequestStats,
+}
+
+#[derive(mc_serializer_derive::Serial, Debug)]
+pub struct Pong {
+    pub id: i32,
+}
+
+crate::create_mappings! {
+    Pong {
+        def 0x20;
+    }
 }

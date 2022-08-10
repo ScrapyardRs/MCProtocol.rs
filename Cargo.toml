@@ -9,4 +9,5 @@ members = [
     "mc_registry_derive",
     "mc_serializer",
     "mc_serializer_derive",
+    "mc_level",
 ]

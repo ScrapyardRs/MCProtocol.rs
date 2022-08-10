@@ -214,6 +214,15 @@ impl<'a> BorrowedPacketBuffer<'a> {
 }
 
 impl OwnedPacketBuffer {
+    pub fn new(read_half: OwnedReadHalf) -> Self {
+        Self {
+            read_half,
+            bytes: BytesMut::with_capacity(BUFFER_CAPACITY),
+            decoded: BytesMut::with_capacity(BUFFER_CAPACITY),
+            decryption: None,
+        }
+    }
+
     pub fn enable_decryption(&mut self, codec: crate::encryption::Codec) {
         self.decryption = Some(Decrypt::new(codec));
     }
