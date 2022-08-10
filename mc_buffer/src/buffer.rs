@@ -1,18 +1,20 @@
-use crate::encryption::Decrypt;
+use crate::encryption::{Codec, Compressor};
 use anyhow::Context;
 use bytes::{Buf, BufMut, BytesMut};
+use mc_registry::mappings::Mappings;
 use mc_serializer::primitive::VarInt;
+use mc_serializer::serde::ProtocolVersion;
 use std::borrow::Borrow;
 use std::io::Cursor;
 use std::ops::Deref;
 use std::time::Duration;
-use tokio::io::AsyncReadExt;
-use tokio::net::tcp::OwnedReadHalf;
+use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::tcp::ReadHalf;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
 const BUFFER_CAPACITY: usize = 2097154; // static value from wiki.vg
 
-pub type PacketBufferFuture<'a, T> = futures::future::BoxFuture<'a, anyhow::Result<T>>;
+pub type PacketFuture<'a, T> = futures::future::BoxFuture<'a, anyhow::Result<T>>;
 
 pub enum BufferState {
     Waiting,
@@ -20,8 +22,8 @@ pub enum BufferState {
     Error(String),
 }
 
-pub trait PacketBuffer: Send + Sync {
-    fn read(&mut self) -> PacketBufferFuture<usize>;
+pub trait PacketReader: Send + Sync {
+    fn read(&mut self) -> PacketFuture<usize>;
 
     fn bytes(&self) -> &BytesMut;
 
@@ -31,9 +33,11 @@ pub trait PacketBuffer: Send + Sync {
 
     fn decoded_mut(&mut self) -> &mut BytesMut;
 
-    fn decryption_mut(&mut self) -> Option<&mut Decrypt>;
+    fn decryption_mut(&mut self) -> Option<&mut Codec>;
 
-    fn construct_all(&mut self) -> (&mut BytesMut, &mut BytesMut, Option<&mut Decrypt>);
+    fn compression(&self) -> Option<&Compressor>;
+
+    fn construct_all(&mut self) -> (&mut BytesMut, &mut BytesMut, Option<&mut Codec>);
 
     fn len(&self) -> (usize, usize) {
         (self.bytes().len(), self.decoded().len())
@@ -57,7 +61,7 @@ pub trait PacketBuffer: Send + Sync {
         }
     }
 
-    fn poll(&mut self) -> PacketBufferFuture<BufferState> {
+    fn poll(&mut self) -> PacketFuture<BufferState> {
         Box::pin(async move {
             println!("POLL BEGIN");
             if self.is_packet_available() {
@@ -114,7 +118,7 @@ pub trait PacketBuffer: Send + Sync {
         })
     }
 
-    fn loop_read(&mut self) -> PacketBufferFuture<Vec<u8>> {
+    fn loop_read(&mut self) -> PacketFuture<Vec<u8>> {
         println!("Create loop read future.");
         Box::pin(async move {
             println!("Inner loop read future");
@@ -137,6 +141,11 @@ pub trait PacketBuffer: Send + Sync {
                         let len = self.decoded().len();
                         self.decoded_mut().reserve(BUFFER_CAPACITY - len);
 
+                        let cursor = match self.compression() {
+                            None => cursor,
+                            Some(compressor) => compressor.decompress(cursor)?,
+                        };
+
                         log::info!("OUT: {} <len: {:?}>", length + length_size, self.len());
 
                         return Ok(cursor);
@@ -149,12 +158,41 @@ pub trait PacketBuffer: Send + Sync {
     }
 }
 
-pub struct BorrowedPacketBuffer<'a> {
-    owned_ref: &'a mut OwnedPacketBuffer,
+pub trait PacketWriter: Send + Sync {
+    fn writer(&mut self) -> &mut OwnedWriteHalf;
+
+    fn compression(&self) -> Option<&Compressor>;
+
+    fn encrypt(&mut self, buffer: &mut Vec<u8>);
+
+    fn protocol_version(&self) -> ProtocolVersion;
+
+    fn send_packet<'a, Packet: Mappings<PacketType = Packet> + Send + Sync + 'a>(
+        &'a mut self,
+        packet: Packet,
+    ) -> PacketFuture<'a, ()> {
+        Box::pin(async move {
+            let buffer = Packet::create_packet_buffer(self.protocol_version(), packet)?;
+
+            let mut buffer = if let Some(compressor) = self.compression() {
+                compressor.compress(buffer)?
+            } else {
+                Compressor::uncompressed(buffer)?
+            };
+
+            self.encrypt(&mut buffer);
+            self.writer().write_all(&buffer).await?;
+            Ok(())
+        })
+    }
 }
 
-impl<'a> PacketBuffer for BorrowedPacketBuffer<'a> {
-    fn read(&mut self) -> PacketBufferFuture<usize> {
+pub struct BorrowedPacketReader<'a> {
+    owned_ref: &'a mut OwnedPacketReader,
+}
+
+impl<'a> PacketReader for BorrowedPacketReader<'a> {
+    fn read(&mut self) -> PacketFuture<usize> {
         self.owned_ref.read()
     }
 
@@ -174,24 +212,29 @@ impl<'a> PacketBuffer for BorrowedPacketBuffer<'a> {
         self.owned_ref.decoded_mut()
     }
 
-    fn decryption_mut(&mut self) -> Option<&mut Decrypt> {
+    fn decryption_mut(&mut self) -> Option<&mut Codec> {
         self.owned_ref.decryption_mut()
     }
 
-    fn construct_all(&mut self) -> (&mut BytesMut, &mut BytesMut, Option<&mut Decrypt>) {
+    fn compression(&self) -> Option<&Compressor> {
+        self.owned_ref.compression()
+    }
+
+    fn construct_all(&mut self) -> (&mut BytesMut, &mut BytesMut, Option<&mut Codec>) {
         self.owned_ref.construct_all()
     }
 }
 
-pub struct OwnedPacketBuffer {
+pub struct OwnedPacketReader {
     read_half: OwnedReadHalf,
     bytes: BytesMut,
     decoded: BytesMut,
-    decryption: Option<Decrypt>,
+    decryption: Option<Codec>,
+    compressor: Option<Compressor>,
 }
 
-impl PacketBuffer for OwnedPacketBuffer {
-    fn read(&mut self) -> PacketBufferFuture<usize> {
+impl PacketReader for OwnedPacketReader {
+    fn read(&mut self) -> PacketFuture<usize> {
         Box::pin(async move {
             self.read_half
                 .read_buf(&mut self.bytes)
@@ -211,29 +254,111 @@ impl PacketBuffer for OwnedPacketBuffer {
     fn decoded_mut(&mut self) -> &mut BytesMut {
         &mut self.decoded
     }
-    fn decryption_mut(&mut self) -> Option<&mut Decrypt> {
+    fn decryption_mut(&mut self) -> Option<&mut Codec> {
         self.decryption.as_mut()
     }
-    fn construct_all(&mut self) -> (&mut BytesMut, &mut BytesMut, Option<&mut Decrypt>) {
+
+    fn compression(&self) -> Option<&Compressor> {
+        self.compressor.as_ref()
+    }
+
+    fn construct_all(&mut self) -> (&mut BytesMut, &mut BytesMut, Option<&mut Codec>) {
         (&mut self.bytes, &mut self.decoded, self.decryption.as_mut())
     }
 }
 
-impl OwnedPacketBuffer {
+impl OwnedPacketReader {
     pub fn new(read_half: OwnedReadHalf) -> Self {
         Self {
             read_half,
             bytes: BytesMut::with_capacity(BUFFER_CAPACITY),
             decoded: BytesMut::with_capacity(BUFFER_CAPACITY),
             decryption: None,
+            compressor: None,
         }
     }
 
-    pub fn enable_decryption(&mut self, codec: crate::encryption::Codec) {
-        self.decryption = Some(Decrypt::new(codec));
+    pub fn enable_decryption(&mut self, codec: Codec) {
+        self.decryption = Some(codec);
     }
 
-    pub fn borrow_buffer(&mut self) -> BorrowedPacketBuffer {
-        BorrowedPacketBuffer { owned_ref: self }
+    pub fn enable_compression(&mut self, compressor: Compressor) {
+        self.compressor = Some(compressor);
+    }
+
+    pub fn borrow_buffer(&mut self) -> BorrowedPacketReader {
+        BorrowedPacketReader { owned_ref: self }
+    }
+}
+
+pub struct BorrowedPacketWriter<'a> {
+    owned_ref: &'a mut OwnedPacketWriter,
+}
+
+impl<'a> PacketWriter for BorrowedPacketWriter<'a> {
+    fn writer(&mut self) -> &mut OwnedWriteHalf {
+        self.owned_ref.writer()
+    }
+
+    fn compression(&self) -> Option<&Compressor> {
+        self.owned_ref.compression()
+    }
+
+    fn encrypt(&mut self, buffer: &mut Vec<u8>) {
+        self.owned_ref.encrypt(buffer)
+    }
+
+    fn protocol_version(&self) -> ProtocolVersion {
+        self.owned_ref.protocol_version()
+    }
+}
+
+pub struct OwnedPacketWriter {
+    write_half: OwnedWriteHalf,
+    protocol_version: ProtocolVersion,
+    decryption: Option<Codec>,
+    compressor: Option<Compressor>,
+}
+
+impl PacketWriter for OwnedPacketWriter {
+    fn writer(&mut self) -> &mut OwnedWriteHalf {
+        &mut self.write_half
+    }
+
+    fn compression(&self) -> Option<&Compressor> {
+        self.compressor.as_ref()
+    }
+
+    fn encrypt(&mut self, buffer: &mut Vec<u8>) {
+        if let Some(decryption) = self.decryption.as_mut() {
+            decryption.decrypt(buffer)
+        }
+    }
+
+    fn protocol_version(&self) -> ProtocolVersion {
+        self.protocol_version
+    }
+}
+
+impl OwnedPacketWriter {
+    pub fn new(write_half: OwnedWriteHalf, protocol_version: ProtocolVersion) -> Self {
+        Self {
+            protocol_version,
+            write_half,
+            decryption: None,
+            compressor: None,
+        }
+    }
+
+    pub fn enable_decryption(&mut self, codec: Codec) {
+        self.decryption = Some(codec);
+    }
+
+    pub fn enabled_compression(&mut self, compressor: Compressor) {
+        self.compressor = Some(compressor);
+    }
+
+    pub fn borrow_buffer(&mut self) -> BorrowedPacketWriter {
+        BorrowedPacketWriter { owned_ref: self }
     }
 }

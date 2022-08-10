@@ -73,7 +73,8 @@ impl Compressor {
             let total_length_data = compressed_length + VarInt::from(uncompressed_length_length);
 
             let mut result = Cursor::new(Vec::with_capacity(
-                (total_length_data.size(ProtocolVersion::Unknown)? + uncompressed_length_length).try_into()?,
+                (total_length_data.size(ProtocolVersion::Unknown)? + uncompressed_length_length)
+                    .try_into()?,
             ));
             total_length_data.serialize(&mut result, ProtocolVersion::Unknown)?;
             initial_size.serialize(&mut result, ProtocolVersion::Unknown)?;
@@ -84,7 +85,8 @@ impl Compressor {
         } else {
             let total_length_data = VarInt::from(1i32 /* 0 = 1 byte */) + initial_size;
 
-            let mut result = Vec::with_capacity((total_length_data.size(ProtocolVersion::Unknown)?).try_into()?);
+            let mut result =
+                Vec::with_capacity((total_length_data.size(ProtocolVersion::Unknown)?).try_into()?);
             total_length_data.serialize(&mut result, ProtocolVersion::Unknown)?;
             VarInt::from(0).serialize(&mut result, ProtocolVersion::Unknown)?;
             result.append(&mut packet);
@@ -113,33 +115,5 @@ impl Compressor {
         length.serialize(&mut writer, ProtocolVersion::Unknown)?;
         writer.append(&mut packet);
         Ok(writer)
-    }
-}
-
-pub struct Encrypt {
-    encryption: Codec,
-}
-
-impl Encrypt {
-    pub fn new(encryption: Codec) -> Self {
-        Self { encryption }
-    }
-
-    pub fn encrypt(&mut self, slice: &mut [u8]) {
-        self.encryption.encrypt(slice);
-    }
-}
-
-pub struct Decrypt {
-    decryption: Codec,
-}
-
-impl Decrypt {
-    pub fn new(decryption: Codec) -> Self {
-        Self { decryption }
-    }
-
-    pub fn decrypt(&mut self, slice: &mut [u8]) {
-        self.decryption.decrypt(slice);
     }
 }

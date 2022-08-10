@@ -1,7 +1,7 @@
 use bytes::Buf;
 use futures::future::BoxFuture;
-use mc_buffer::buffer::{OwnedPacketBuffer, PacketBuffer};
-use mc_buffer::encryption::{Compressor, Encrypt};
+use mc_buffer::buffer::{OwnedPacketReader, PacketReader};
+use mc_buffer::encryption::Compressor;
 use mc_chat::Chat;
 use mc_registry::client_bound::login::{LoginSuccess, SetCompression};
 use mc_registry::client_bound::play::{
@@ -173,7 +173,7 @@ async fn main() -> anyhow::Result<()> {
     let connection = TcpStream::connect("localhost:25565").await?;
     let (read, write) = connection.into_split();
 
-    let mut packet_buffer = OwnedPacketBuffer::new(read);
+    let mut packet_buffer = OwnedPacketReader::new(read);
     let mut context = Test { owned_write: write };
 
     let handshake = Handshake {
