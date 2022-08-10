@@ -2,7 +2,9 @@ use crate::encryption::Decrypt;
 use anyhow::Context;
 use bytes::{Buf, BufMut, BytesMut};
 use mc_serializer::primitive::VarInt;
+use std::borrow::Borrow;
 use std::io::Cursor;
+use std::ops::Deref;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::net::tcp::OwnedReadHalf;
@@ -84,8 +86,7 @@ pub trait PacketBuffer: Send + Sync {
                         "Next packet was too big to decode, something went wrong.",
                     ))
                 } else if self.len() == (0, 0) {
-                    // BufferState::Error(String::from("Read sink empty."))
-                    BufferState::Waiting
+                    BufferState::Error(String::from("Read sink empty."))
                 } else {
                     BufferState::Waiting
                 });
@@ -148,29 +149,38 @@ pub trait PacketBuffer: Send + Sync {
     }
 }
 
-macro_rules! buffer_impl {
-    ($obj:ident$(<$lifetime:lifetime>)?) => {
-        impl$(<$lifetime>)? PacketBuffer for $obj$(<$lifetime>)? {
-            fn read<'buffer_read_impl>(&'buffer_read_impl mut self) -> PacketBufferFuture<'buffer_read_impl, usize> {
-                Box::pin(async move { self.read_half.read_buf(&mut self.bytes).await.context("Failed to read buf.") })
-            }
-            fn bytes(&self) -> &BytesMut { &self.bytes }
-            fn bytes_mut(&mut self) -> &mut BytesMut { &mut self.bytes }
-            fn decoded(&self) -> &BytesMut { &self.decoded }
-            fn decoded_mut(&mut self) -> &mut BytesMut { &mut self.decoded }
-            fn decryption_mut(&mut self) -> Option<&mut Decrypt> { self.decryption.as_mut() }
-            fn construct_all(&mut self) -> (&mut BytesMut, &mut BytesMut, Option<&mut Decrypt>) {
-                (&mut self.bytes, &mut self.decoded, self.decryption.as_mut())
-            }
-        }
-    }
+pub struct BorrowedPacketBuffer<'a> {
+    owned_ref: &'a mut OwnedPacketBuffer,
 }
 
-pub struct BorrowedPacketBuffer<'a> {
-    read_half: ReadHalf<'a>,
-    bytes: BytesMut,
-    decoded: BytesMut,
-    decryption: Option<Decrypt>,
+impl<'a> PacketBuffer for BorrowedPacketBuffer<'a> {
+    fn read(&mut self) -> PacketBufferFuture<usize> {
+        self.owned_ref.read()
+    }
+
+    fn bytes(&self) -> &BytesMut {
+        self.owned_ref.bytes()
+    }
+
+    fn bytes_mut(&mut self) -> &mut BytesMut {
+        self.owned_ref.bytes_mut()
+    }
+
+    fn decoded(&self) -> &BytesMut {
+        self.owned_ref.decoded()
+    }
+
+    fn decoded_mut(&mut self) -> &mut BytesMut {
+        self.owned_ref.decoded_mut()
+    }
+
+    fn decryption_mut(&mut self) -> Option<&mut Decrypt> {
+        self.owned_ref.decryption_mut()
+    }
+
+    fn construct_all(&mut self) -> (&mut BytesMut, &mut BytesMut, Option<&mut Decrypt>) {
+        self.owned_ref.construct_all()
+    }
 }
 
 pub struct OwnedPacketBuffer {
@@ -180,53 +190,32 @@ pub struct OwnedPacketBuffer {
     decryption: Option<Decrypt>,
 }
 
-buffer_impl!(BorrowedPacketBuffer<'a>);
-buffer_impl!(OwnedPacketBuffer);
-
-impl<'a> BorrowedPacketBuffer<'a> {
-    pub fn new(read_half: ReadHalf<'a>) -> Self {
-        Self {
-            read_half,
-            bytes: BytesMut::with_capacity(BUFFER_CAPACITY),
-            decoded: BytesMut::with_capacity(BUFFER_CAPACITY),
-            decryption: None,
-        }
+impl PacketBuffer for OwnedPacketBuffer {
+    fn read(&mut self) -> PacketBufferFuture<usize> {
+        Box::pin(async move {
+            self.read_half
+                .read_buf(&mut self.bytes)
+                .await
+                .context("Failed to read buf.")
+        })
     }
-
-    pub fn enable_decryption(&mut self, codec: crate::encryption::Codec) {
-        self.decryption = Some(Decrypt::new(codec));
+    fn bytes(&self) -> &BytesMut {
+        &self.bytes
     }
-
-    pub fn into_owned_buffer(self, owned_half: OwnedReadHalf) -> OwnedPacketBuffer {
-        let BorrowedPacketBuffer {
-            bytes,
-            decoded,
-            decryption,
-            ..
-        } = self;
-        OwnedPacketBuffer {
-            read_half: owned_half,
-            bytes,
-            decoded,
-            decryption,
-        }
+    fn bytes_mut(&mut self) -> &mut BytesMut {
+        &mut self.bytes
     }
-
-    pub fn transport(self) -> BufferTransport {
-        print!("{:?} == ", (self.len()));
-        let BorrowedPacketBuffer {
-            bytes,
-            decoded,
-            decryption,
-            ..
-        } = self;
-        let transport = BufferTransport {
-            bytes,
-            decoded,
-            decryption,
-        };
-        println!("{:?}", (transport.bytes.len(), transport.decoded.len()));
-        transport
+    fn decoded(&self) -> &BytesMut {
+        &self.decoded
+    }
+    fn decoded_mut(&mut self) -> &mut BytesMut {
+        &mut self.decoded
+    }
+    fn decryption_mut(&mut self) -> Option<&mut Decrypt> {
+        self.decryption.as_mut()
+    }
+    fn construct_all(&mut self) -> (&mut BytesMut, &mut BytesMut, Option<&mut Decrypt>) {
+        (&mut self.bytes, &mut self.decoded, self.decryption.as_mut())
     }
 }
 
@@ -244,56 +233,7 @@ impl OwnedPacketBuffer {
         self.decryption = Some(Decrypt::new(codec));
     }
 
-    pub fn transport(self) -> BufferTransport {
-        print!("{:?} == ", (self.len()));
-        let OwnedPacketBuffer {
-            bytes,
-            decoded,
-            decryption,
-            ..
-        } = self;
-        let transport = BufferTransport {
-            bytes,
-            decoded,
-            decryption,
-        };
-        println!("{:?}", (transport.bytes.len(), transport.decoded.len()));
-        transport
-    }
-}
-
-pub struct BufferTransport {
-    bytes: BytesMut,
-    decoded: BytesMut,
-    decryption: Option<Decrypt>,
-}
-
-impl BufferTransport {
-    pub fn owned(self, owned: OwnedReadHalf) -> OwnedPacketBuffer {
-        let BufferTransport {
-            bytes,
-            decoded,
-            decryption,
-        } = self;
-        OwnedPacketBuffer {
-            read_half: owned,
-            bytes,
-            decoded,
-            decryption,
-        }
-    }
-
-    pub fn borrowed(self, borrow: ReadHalf) -> BorrowedPacketBuffer {
-        let BufferTransport {
-            bytes,
-            decoded,
-            decryption,
-        } = self;
-        BorrowedPacketBuffer {
-            read_half: borrow,
-            bytes,
-            decoded,
-            decryption,
-        }
+    pub fn borrow_buffer(&mut self) -> BorrowedPacketBuffer {
+        BorrowedPacketBuffer { owned_ref: self }
     }
 }
