@@ -103,16 +103,22 @@ pub trait PacketWriterGeneric: PacketWriter {
 impl<T: PacketReaderGeneric> PacketReader for T {
     fn poll(&mut self) -> PacketFuture<BufferState> {
         Box::pin(async move {
+            println!("Poll start.");
             if self.is_packet_available() {
+                println!("Packet available.");
                 return Ok(BufferState::PacketReady);
             }
 
-            let size_read =
-                match tokio::time::timeout(Duration::from_secs(10), self.read()).await {
-                    Ok(result) => result?,
-                    Err(_) => return Ok(BufferState::Error(String::from("Client read timeout."))),
-                }
-                .min(self.decoded().capacity() - self.decoded().len());
+            let size_read = match tokio::time::timeout(Duration::from_secs(10), self.read()).await {
+                Ok(result) => result?,
+                Err(_) => return Ok(BufferState::Error(String::from("Client read timeout."))),
+            };
+
+            println!("Read bytes: {:?}", size_read);
+
+            let size_read = size_read.min(self.decoded().capacity() - self.decoded().len());
+
+            println!("Read bytes post size read: {:?}", size_read);
 
             if size_read == 0 {
                 return Ok(if self.is_packet_available() {

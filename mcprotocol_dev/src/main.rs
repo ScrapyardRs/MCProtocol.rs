@@ -7,8 +7,9 @@ use mc_registry::registry::{LockedContext, StateRegistry};
 use mc_registry::server_bound::handshaking::{Handshake, NextState, ServerAddress};
 
 use mc_registry::client_bound::login::EncryptionRequest;
-use mc_registry::server_bound::login::LoginStart;
+use mc_registry::server_bound::login::{EncryptionResponse, EncryptionResponseData, LoginStart};
 use mc_registry::shared_types::login::LoginUsername;
+use mc_serializer::primitive::VarInt;
 use mc_serializer::serde::ProtocolVersion;
 use mc_serializer::serde::ProtocolVersion::Unknown;
 use tokio::net::TcpStream;
@@ -51,6 +52,26 @@ pub async fn main() -> anyhow::Result<()> {
             sig_holder: (false, None),
         })
         .await?;
+
+    engine
+        .read_packets_until(reg, |unhandled, _| {
+            println!(
+                "PACKET {:?}",
+                unhandled.map(|unh| (unh.packet_id, unh.bytes))
+            );
+            true // only read 1
+        })
+        .await?;
+
+    engine
+        .send_packet(EncryptionResponse {
+            shared_secret: (VarInt::from(2), vec![0x00, 0x01]),
+            response_data: EncryptionResponseData::VerifyTokenData((0.into(), vec![])),
+        })
+        .await?;
+
+    create_registry! { reg, Unknown {
+    }};
 
     engine
         .read_packets_until(reg, |unhandled, _| {
