@@ -7,6 +7,9 @@ use std::io::Cursor;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+#[macro_export]
+macro_rules! needless_life(() => (#[allow(clippy::needless_lifetimes)]));
+
 pub type BoxedFuture<'a> = BoxFuture<'a, crate::Result<()>>;
 
 pub type ArcLocked<Item> = Arc<RwLock<Item>>;
@@ -110,4 +113,3 @@ macro_rules! create_registry {
         };
     };
 }
-
