@@ -20,7 +20,6 @@ pub fn is_default_variant(attributes: &Vec<Attribute>) -> bool {
     for attr in attributes {
         if let Some(segment) = attr.path.segments.first() {
             if segment.ident == "default" {
-                println!("FOUND DEFAULT!");
                 return true;
             }
         }
@@ -70,7 +69,6 @@ impl VariantWrapper {
         let fields_variant_def = self.fields.enum_variant_def();
         let self_ident = &self.full_path;
         if self.is_default && !ignore_default {
-            println!("Quoting default variant def.");
             quote::quote!(_ =>)
         } else {
             quote::quote!(#self_ident #fields_variant_def =>)

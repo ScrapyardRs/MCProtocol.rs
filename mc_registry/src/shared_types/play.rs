@@ -6,9 +6,9 @@ use mc_serializer::serde::{
 };
 use mc_serializer::wrap_indexed_struct_context;
 use mc_serializer::wrap_struct_context;
-use nbt::Value;
+
 use std::io::{Read, Write};
-use std::iter::Map;
+
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Ingredient {
@@ -20,9 +20,6 @@ pub struct ItemStack {
     pub item_id: VarInt,
     pub count: u8,
     #[nbt(inject_header)]
-    #[after(de {
-        println!("Read complete item tag. {:?}", wrap_struct_context!("tag_json", serde_json::to_string_pretty(&__serde_item_tag).map_err(|err| mc_serializer::serde::Error::SerdeJsonError(err, Self::base_context())))?);
-    })]
     pub item_tag: nbt::Blob,
 }
 
@@ -88,10 +85,6 @@ impl Deserialize for ShapedRecipeSerializer {
             "what_is_this",
             ResourceLocation::deserialize(reader, protocol_version)
         )?;
-        println!(
-            "Resource Location For Recipe Internal: {}",
-            resource_location
-        );
         let width = wrap_struct_context!("width", VarInt::deserialize(reader, protocol_version))?;
         let height =
             wrap_struct_context!("height", Deserialize::deserialize(reader, protocol_version))?;

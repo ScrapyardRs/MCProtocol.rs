@@ -3,9 +3,9 @@ use mc_buffer::buffer::PacketWriter;
 use mc_buffer::engine::{BufferRegistryEngine, BufferRegistryEngineContext, Context};
 use mc_registry::client_bound::play::Ping;
 use mc_registry::create_registry;
-use mc_registry::registry::{arc_lock, LockedContext, StateRegistry};
+use mc_registry::registry::{LockedContext, StateRegistry};
 use mc_registry::server_bound::handshaking::Handshake;
-use mc_serializer::serde::ProtocolVersion;
+
 use mc_serializer::serde::ProtocolVersion::Unknown;
 use tokio::net::TcpStream;
 

@@ -4,13 +4,13 @@ use bytes::{Buf, BufMut, BytesMut};
 use mc_registry::mappings::Mappings;
 use mc_serializer::primitive::VarInt;
 use mc_serializer::serde::ProtocolVersion;
-use std::borrow::Borrow;
+
 use std::io::Cursor;
-use std::ops::Deref;
+
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::tcp::ReadHalf;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::RwLock;
 
@@ -103,7 +103,6 @@ pub trait PacketWriterGeneric: PacketWriter {
 impl<T: PacketReaderGeneric> PacketReader for T {
     fn poll(&mut self) -> PacketFuture<BufferState> {
         Box::pin(async move {
-            println!("POLL BEGIN");
             if self.is_packet_available() {
                 return Ok(BufferState::PacketReady);
             }
@@ -114,8 +113,6 @@ impl<T: PacketReaderGeneric> PacketReader for T {
                     Err(_) => return Ok(BufferState::Error(String::from("Client read timeout."))),
                 }
                 .min(self.decoded().capacity() - self.decoded().len());
-
-            println!("POLL END {}", size_read);
 
             if size_read == 0 {
                 return Ok(if self.is_packet_available() {
@@ -159,13 +156,10 @@ impl<T: PacketReaderGeneric> PacketReader for T {
     }
 
     fn loop_read(&mut self) -> PacketFuture<Vec<u8>> {
-        println!("Create loop read future.");
         Box::pin(async move {
-            println!("Inner loop read future");
             loop {
                 match self.poll().await? {
                     BufferState::PacketReady => {
-                        println!("PACKET READY!");
                         let mut cursor = Cursor::new(self.decoded().chunk());
                         let (length_size, length) = VarInt::decode_and_size(&mut cursor)?;
 

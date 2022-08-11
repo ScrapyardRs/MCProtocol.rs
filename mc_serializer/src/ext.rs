@@ -5,13 +5,13 @@ use crate::serde::{
 };
 use crate::{wrap_indexed_struct_context, wrap_struct_context};
 use bytes::Buf;
-use cesu8::{to_cesu8, to_java_cesu8};
+
 use mc_level::codec::Codec;
-use std::borrow::BorrowMut;
+
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::io::{Cursor, ErrorKind, Read, Write};
-use std::mem::MaybeUninit;
+
 
 impl<T: Contextual> Contextual for (VarInt, Vec<T>) {
     fn context() -> String {
