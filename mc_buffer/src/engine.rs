@@ -153,3 +153,12 @@ impl BufferRegistryEngine {
         self.packet_writer.protocol_version()
     }
 }
+
+impl PacketWriter for BufferRegistryEngine {
+    fn send_packet<'a, Packet: Mappings<PacketType = Packet> + Send + Sync + 'a>(
+        &'a mut self,
+        packet: Packet,
+    ) -> PacketFuture<'a, ()> {
+        self.packet_writer.send_packet(packet)
+    }
+}
