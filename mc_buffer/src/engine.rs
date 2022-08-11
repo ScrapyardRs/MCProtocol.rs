@@ -144,4 +144,8 @@ impl BufferRegistryEngine {
     pub async fn map_inner(&self) -> ArcLocked<ShareMap> {
         Arc::clone(&self.context_data)
     }
+
+    pub async fn clear_data(&self) {
+        self.context_data.write().await.clear()
+    }
 }
