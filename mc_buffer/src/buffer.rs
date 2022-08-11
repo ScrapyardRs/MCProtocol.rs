@@ -207,6 +207,9 @@ impl<T: PacketWriterGeneric> PacketWriter for T {
             };
 
             self.encrypt(&mut buffer);
+
+            println!("Writing buffer {:?} to client.", buffer);
+
             self.writer().write_all(&buffer).await?;
             Ok(())
         })
