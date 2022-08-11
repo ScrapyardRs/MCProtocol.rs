@@ -108,7 +108,7 @@ macro_rules! create_registry {
     }) => {
         let mut $registry_ident = {
             let mut $registry_ident = $crate::registry::StateRegistry::new($protocol_version);
-            $($crate::register_handler!($registry_ident, $packet, $handler))*;
+            $($crate::register_handler!($registry_ident, $packet, $handler);)*
             $registry_ident
         };
     };
