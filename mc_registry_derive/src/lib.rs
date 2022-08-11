@@ -1,6 +1,6 @@
 use proc_macro2::{TokenStream, TokenTree};
 use quote::ToTokens;
-use syn::parse_macro_input;
+use syn::{parse_macro_input, ReturnType};
 
 #[proc_macro_attribute]
 pub fn packet_handler(
@@ -9,6 +9,12 @@ pub fn packet_handler(
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item as syn::ItemFn);
     let block = &input.block;
+
+    let result_type = if !(matches!(input.sig.output, ReturnType::Default)) {
+        quote::quote!()
+    } else {
+        quote::quote!(Ok(()))
+    };
 
     let attribute_iter = attr.into_iter();
 
@@ -127,7 +133,7 @@ pub fn packet_handler(
                 let __packet = mc_registry::mappings::create_packet::<#mappings_tokens>(__protocol_version, __buffer)?;
                 #(#extra_setters)*
                 #block
-                Ok(())
+                #result_type
             })
         }
     })
