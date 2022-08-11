@@ -6,9 +6,7 @@ use tokio::sync::{RwLock, RwLockWriteGuard};
 use typemap::{Key, ShareMap};
 
 use mc_registry::mappings::Mappings;
-use mc_registry::registry::{
-    arc_lock, ArcLocked, StateRegistry, UnhandledContext,
-};
+use mc_registry::registry::{arc_lock, ArcLocked, StateRegistry, UnhandledContext};
 use mc_serializer::primitive::VarInt;
 use mc_serializer::serde::ProtocolVersion;
 
