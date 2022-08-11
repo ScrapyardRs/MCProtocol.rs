@@ -116,4 +116,24 @@ impl BufferRegistryEngine {
         self.packet_reader.enable_decryption(r);
         self.packet_writer.enabled_encryption(w);
     }
+
+    pub async fn insert_data<K: Key>(&self, value: K::Value)
+    where
+        K::Value: Send + Sync,
+    {
+        let mut map_write = self.context_data.write().await;
+        map_write.insert::<K>(value);
+    }
+
+    pub async fn clone_data<K: Key>(&self) -> Option<K::Value>
+    where
+        K::Value: Send + Sync + Clone,
+    {
+        let map_read = self.context_data.read().await;
+        map_read.get::<K>().cloned()
+    }
+
+    pub async fn map_inner(&self) -> ArcLocked<ShareMap> {
+        Arc::clone(&self.context_data)
+    }
 }

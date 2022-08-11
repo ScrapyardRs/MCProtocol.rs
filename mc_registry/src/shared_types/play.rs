@@ -9,7 +9,6 @@ use mc_serializer::wrap_struct_context;
 
 use std::io::{Read, Write};
 
-
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Ingredient {
     ingredients: (VarInt, Vec<ItemStackContainer>),
@@ -81,7 +80,7 @@ impl Deserialize for ShapedRecipeSerializer {
         reader: &mut R,
         protocol_version: ProtocolVersion,
     ) -> mc_serializer::serde::Result<Self> {
-        let resource_location = wrap_struct_context!(
+        wrap_struct_context!(
             "what_is_this",
             ResourceLocation::deserialize(reader, protocol_version)
         )?;
