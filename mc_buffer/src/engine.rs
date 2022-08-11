@@ -125,6 +125,14 @@ impl BufferRegistryEngine {
         map_write.insert::<K>(value);
     }
 
+    pub async fn contains_data<K: Key>(&self) -> bool
+    where
+        K::Value: Send + Sync,
+    {
+        let map_read = self.context_data.read().await;
+        map_read.contains::<K>()
+    }
+
     pub async fn clone_data<K: Key>(&self) -> Option<K::Value>
     where
         K::Value: Send + Sync + Clone,
