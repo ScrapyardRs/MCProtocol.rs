@@ -7,10 +7,12 @@ use mc_serializer::serde::ProtocolVersion;
 use std::borrow::Borrow;
 use std::io::Cursor;
 use std::ops::Deref;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::tcp::ReadHalf;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::sync::RwLock;
 
 const BUFFER_CAPACITY: usize = 2097154; // static value from wiki.vg
 
@@ -22,7 +24,26 @@ pub enum BufferState {
     Error(String),
 }
 
+impl<T: PacketWriter> PacketWriter for Arc<RwLock<T>> {
+    fn send_packet<'a, Packet: Mappings<PacketType = Packet> + Send + Sync + 'a>(
+        &'a mut self,
+        packet: Packet,
+    ) -> PacketFuture<'a, ()> {
+        let self_clone = Arc::clone(self);
+        Box::pin(async move {
+            let mut write = self_clone.write().await;
+            write.send_packet(packet).await
+        })
+    }
+}
+
 pub trait PacketReader: Send + Sync {
+    fn poll(&mut self) -> PacketFuture<BufferState>;
+
+    fn loop_read(&mut self) -> PacketFuture<Vec<u8>>;
+}
+
+pub trait PacketReaderGeneric: PacketReader {
     fn read(&mut self) -> PacketFuture<usize>;
 
     fn bytes(&self) -> &BytesMut;
@@ -60,7 +81,26 @@ pub trait PacketReader: Send + Sync {
             false
         }
     }
+}
 
+pub trait PacketWriter: Send + Sync {
+    fn send_packet<'a, Packet: Mappings<PacketType = Packet> + Send + Sync + 'a>(
+        &'a mut self,
+        packet: Packet,
+    ) -> PacketFuture<'a, ()>;
+}
+
+pub trait PacketWriterGeneric: PacketWriter {
+    fn writer(&mut self) -> &mut OwnedWriteHalf;
+
+    fn compression(&self) -> Option<&Compressor>;
+
+    fn encrypt(&mut self, buffer: &mut Vec<u8>);
+
+    fn protocol_version(&self) -> ProtocolVersion;
+}
+
+impl<T: PacketReaderGeneric> PacketReader for T {
     fn poll(&mut self) -> PacketFuture<BufferState> {
         Box::pin(async move {
             println!("POLL BEGIN");
@@ -158,15 +198,7 @@ pub trait PacketReader: Send + Sync {
     }
 }
 
-pub trait PacketWriter: Send + Sync {
-    fn writer(&mut self) -> &mut OwnedWriteHalf;
-
-    fn compression(&self) -> Option<&Compressor>;
-
-    fn encrypt(&mut self, buffer: &mut Vec<u8>);
-
-    fn protocol_version(&self) -> ProtocolVersion;
-
+impl<T: PacketWriterGeneric> PacketWriter for T {
     fn send_packet<'a, Packet: Mappings<PacketType = Packet> + Send + Sync + 'a>(
         &'a mut self,
         packet: Packet,
@@ -191,7 +223,7 @@ pub struct BorrowedPacketReader<'a> {
     owned_ref: &'a mut OwnedPacketReader,
 }
 
-impl<'a> PacketReader for BorrowedPacketReader<'a> {
+impl<'a> PacketReaderGeneric for BorrowedPacketReader<'a> {
     fn read(&mut self) -> PacketFuture<usize> {
         self.owned_ref.read()
     }
@@ -233,7 +265,7 @@ pub struct OwnedPacketReader {
     compressor: Option<Compressor>,
 }
 
-impl PacketReader for OwnedPacketReader {
+impl PacketReaderGeneric for OwnedPacketReader {
     fn read(&mut self) -> PacketFuture<usize> {
         Box::pin(async move {
             self.read_half
@@ -295,7 +327,7 @@ pub struct BorrowedPacketWriter<'a> {
     owned_ref: &'a mut OwnedPacketWriter,
 }
 
-impl<'a> PacketWriter for BorrowedPacketWriter<'a> {
+impl<'a> PacketWriterGeneric for BorrowedPacketWriter<'a> {
     fn writer(&mut self) -> &mut OwnedWriteHalf {
         self.owned_ref.writer()
     }
@@ -316,11 +348,11 @@ impl<'a> PacketWriter for BorrowedPacketWriter<'a> {
 pub struct OwnedPacketWriter {
     write_half: OwnedWriteHalf,
     protocol_version: ProtocolVersion,
-    decryption: Option<Codec>,
+    encryption: Option<Codec>,
     compressor: Option<Compressor>,
 }
 
-impl PacketWriter for OwnedPacketWriter {
+impl PacketWriterGeneric for OwnedPacketWriter {
     fn writer(&mut self) -> &mut OwnedWriteHalf {
         &mut self.write_half
     }
@@ -330,7 +362,7 @@ impl PacketWriter for OwnedPacketWriter {
     }
 
     fn encrypt(&mut self, buffer: &mut Vec<u8>) {
-        if let Some(decryption) = self.decryption.as_mut() {
+        if let Some(decryption) = self.encryption.as_mut() {
             decryption.decrypt(buffer)
         }
     }
@@ -345,13 +377,13 @@ impl OwnedPacketWriter {
         Self {
             protocol_version: ProtocolVersion::Handshake,
             write_half,
-            decryption: None,
+            encryption: None,
             compressor: None,
         }
     }
 
-    pub fn enable_decryption(&mut self, codec: Codec) {
-        self.decryption = Some(codec);
+    pub fn enabled_encryption(&mut self, codec: Codec) {
+        self.encryption = Some(codec);
     }
 
     pub fn enabled_compression(&mut self, compressor: Compressor) {

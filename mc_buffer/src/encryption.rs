@@ -52,6 +52,7 @@ impl Codec {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Compressor {
     threshold: VarInt,
 }

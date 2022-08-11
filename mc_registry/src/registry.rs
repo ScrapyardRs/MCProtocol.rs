@@ -90,3 +90,24 @@ impl<'a, Context> StateRegistry<'a, Context> {
         }
     }
 }
+
+#[macro_export]
+macro_rules! register_handler {
+    ($registry:ident, $mappings:ty, $handler:expr) => {
+        $registry.attach_mappings::<$mappings>($handler);
+    };
+}
+
+#[macro_export]
+macro_rules! create_registry {
+    ($registry_ident:ident, $protocol_version:ident {
+        $($packet:ty, $handler:ident)*;
+    }) => {
+        let mut $registry_ident = {
+            let mut $registry_ident = $crate::registry::StateRegistry::new($protocol_version);
+            $($crate::register_handler!($registry_ident, $packet, $handler))*;
+            $registry_ident
+        };
+    };
+}
+
