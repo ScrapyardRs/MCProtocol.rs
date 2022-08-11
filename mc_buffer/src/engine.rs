@@ -12,7 +12,7 @@ use mc_serializer::serde::ProtocolVersion;
 
 use crate::buffer::{
     BorrowedPacketWriter, OwnedPacketReader, OwnedPacketWriter, PacketFuture, PacketReader,
-    PacketWriter,
+    PacketWriter, PacketWriterGeneric,
 };
 use crate::encryption::{Codec, Compressor};
 
@@ -147,5 +147,9 @@ impl BufferRegistryEngine {
 
     pub async fn clear_data(&self) {
         self.context_data.write().await.clear()
+    }
+
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        self.packet_writer.protocol_version()
     }
 }
