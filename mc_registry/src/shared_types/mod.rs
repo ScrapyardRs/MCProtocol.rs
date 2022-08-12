@@ -123,7 +123,7 @@ impl GameProfile {
 impl Serialize for GameProfile {
     fn serialize<W: Write>(&self, writer: &mut W, protocol_version: ProtocolVersion) -> mc_serializer::serde::Result<()> {
         wrap_struct_context!("id", self.id.serialize(writer, protocol_version))?;
-        wrap_struct_context!("name", self.id.serialize(writer, protocol_version))?;
+        wrap_struct_context!("name", self.name.serialize(writer, protocol_version))?;
         let size = self.properties_size()?;
         wrap_struct_context!("properties_size", size.serialize(writer, protocol_version))?;
         wrap_struct_context!("properties", self.properties.serialize(writer, protocol_version))
@@ -132,7 +132,7 @@ impl Serialize for GameProfile {
     fn size(&self, protocol_version: ProtocolVersion) -> mc_serializer::serde::Result<i32> {
         let mut size = 0;
         size += wrap_struct_context!("id", self.id.size(protocol_version))?;
-        size += wrap_struct_context!("name", self.id.size(protocol_version))?;
+        size += wrap_struct_context!("name", self.name.size(protocol_version))?;
         let props_size = self.properties_size()?;
         size += wrap_struct_context!("properties_size", props_size.size(protocol_version))?;
         wrap_struct_context!("properties", self.properties.size(protocol_version))
