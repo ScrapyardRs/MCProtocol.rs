@@ -18,7 +18,7 @@ pub struct Ingredient {
 pub struct ItemStack {
     pub item_id: VarInt,
     pub count: u8,
-    #[nbt(inject_header)]
+    #[nbt]
     pub item_tag: nbt::Blob,
 }
 
