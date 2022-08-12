@@ -84,7 +84,9 @@ impl VariantWrapper {
         let key_ser = if passthrough {
             None
         } else {
-            Some(quote::quote!(mc_serializer::serde::Serialize::serialize(&#key, writer, protocol_version)#key_err;))
+            Some(
+                quote::quote!(mc_serializer::serde::Serialize::serialize(&#key, writer, protocol_version)#key_err;),
+            )
         };
         quote::quote! {
             #enum_variant_def {
@@ -105,7 +107,9 @@ impl VariantWrapper {
         let key_ser = if passthrough {
             None
         } else {
-            Some(quote::quote!(mc_serializer::serde::Serialize::size(&#key, protocol_version)#key_err;))
+            Some(
+                quote::quote!(mc_serializer::serde::Serialize::size(&#key, protocol_version)#key_err;),
+            )
         };
         quote::quote! {
             #enum_variant_def {
@@ -149,7 +153,14 @@ pub fn expand_serial_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) -> To
     let mut variant_serializers = Vec::new();
     let mut variant_sizers = Vec::new();
     let mut variant_deserializers = Vec::new();
-    let mut variant_default = Some(quote::quote!(return Err(mc_serializer::serde::Error::Generic(mc_serializer::serde::SerializerContext::new(Self::context(), format!("Failed to read key {:?} as a valid option.", key_value))))));
+    let mut variant_default = Some(quote::quote!(
+        return Err(mc_serializer::serde::Error::Generic(
+            mc_serializer::serde::SerializerContext::new(
+                Self::context(),
+                format!("Failed to read key {:?} as a valid option.", key_value)
+            )
+        ))
+    ));
 
     for variant in &syn_enum.variants {
         let variant_wrapper = VariantWrapper::new(enum_ident, variant);

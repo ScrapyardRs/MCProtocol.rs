@@ -126,13 +126,19 @@ impl SerialContext {
         }
     }
 
-    fn serializer_short(&self, struct_context: &TokenStream, raw: TokenStream) -> TokenStream {
+    fn serializer_short(
+        &self,
+        struct_context: &TokenStream,
+        raw: TokenStream,
+    ) -> TokenStream {
         let real_field_ident = &self.field_name;
 
         let serializer_base = quote::quote! {
-            #raw.map_err(|err| err.update_context(|ctx| {
-                ctx.current_struct(format!("{}", #struct_context)).current_field(format!("{}", stringify!(#real_field_ident)));
-            }))?;
+            {
+                #raw.map_err(|err| err.update_context(|ctx| {
+                    ctx.current_struct(format!("{}", #struct_context)).current_field(format!("{}", stringify!(#real_field_ident)));
+                }))?;
+            }
         };
 
         self.marker
@@ -159,7 +165,10 @@ impl SerialContext {
             }
             SerialType::Nbt(strip_header) => {
                 if *strip_header {
-                    quote::quote!(mc_serializer::ext::write_nbt(#field_ident, &mut mc_serializer::ext::strip_fake_nbt_header(writer), protocol_version))
+                    quote::quote! {
+                        let mut write_out = mc_serializer::ext::strip_fake_nbt_header(writer);
+                        mc_serializer::ext::write_nbt(#field_ident, &mut write_out, protocol_version)
+                    }
                 } else {
                     quote::quote!(mc_serializer::ext::write_nbt(#field_ident, writer, protocol_version))
                 }
@@ -214,7 +223,13 @@ impl SerialContext {
             )),
             SerialType::Nbt(inject_header) => {
                 if *inject_header {
-                    quote::quote!(mc_serializer::ext::read_nbt(&mut mc_serializer::ext::insert_fake_nbt_header(reader), protocol_version))
+                    quote::quote! {
+                        let mut read_out = mc_serializer::ext::insert_fake_nbt_header(reader);
+                        mc_serializer::ext::read_nbt(
+                            &mut read_out,
+                            protocol_version
+                        )
+                    }
                 } else {
                     quote::quote!(mc_serializer::ext::read_nbt(reader, protocol_version))
                 }
@@ -252,7 +267,7 @@ impl SerialContext {
                     };
                 }
             })
-            .unwrap_or(quote::quote!(let #field_ident: #ty = #serializer_base;));
+            .unwrap_or_else(|| quote::quote!(let #field_ident: #ty = { #serializer_base };));
         match self.marker.after_directive.de.as_ref() {
             None => tokens,
             Some(operator) => quote::quote! {

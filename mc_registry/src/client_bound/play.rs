@@ -250,7 +250,7 @@ pub struct JoinGame {
     pub game_type: GameType,
     pub previous_game_type: GameType,
     pub levels: (VarInt, Vec<ResourceLocation>),
-    #[nbt]
+    #[nbt(inject_header)]
     pub codec: mc_level::codec::Codec,
     pub dimension_type: ResourceLocation,
     pub dimension: ResourceLocation,

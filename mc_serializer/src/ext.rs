@@ -276,9 +276,10 @@ pub fn size_stripped_nbt<T>(value: &T, protocol_version: ProtocolVersion) -> Res
 where
     T: Contextual + serde::ser::Serialize,
 {
-    let mut sizer = strip_fake_nbt_header(InternalSizer::default());
+    let mut outer_size = InternalSizer::default();
+    let mut sizer = strip_fake_nbt_header(&mut outer_size);
     write_nbt(value, &mut sizer, protocol_version)?;
-    Ok(sizer.into_inner().current_size())
+    Ok(outer_size.current_size())
 }
 
 pub fn read_nbt<T, R: Read>(reader: &mut R, _: ProtocolVersion) -> Result<T>
@@ -294,21 +295,15 @@ impl<K: Contextual, V: Contextual> Contextual for HashMap<K, V> {
     }
 }
 
-pub struct FakeNbtHeaderStripper<W: Write> {
-    inner: W,
+pub struct FakeNbtHeaderStripper<'a, W: Write> {
+    inner: &'a mut W,
     cursor: usize,
     skip_state: (i32, u16),
     prep_bytes: Option<u8>,
     buf_to_forward: Vec<u8>,
 }
 
-impl<W: Write> FakeNbtHeaderStripper<W> {
-    pub fn into_inner(self) -> W {
-        self.inner
-    }
-}
-
-impl<W: Write> FakeNbtHeaderStripper<W> {
+impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
     fn handle_bytes(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         if buf.len() == self.cursor {
             return Ok(0);
@@ -404,7 +399,7 @@ impl<W: Write> FakeNbtHeaderStripper<W> {
     }
 }
 
-impl<W: Write> Write for FakeNbtHeaderStripper<W> {
+impl<'a, W: Write> Write for FakeNbtHeaderStripper<'a, W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.cursor = 0;
         self.handle_bytes(buf)
@@ -415,12 +410,18 @@ impl<W: Write> Write for FakeNbtHeaderStripper<W> {
     }
 }
 
-pub struct FakeNbtHeaderInserter<R: Read> {
+pub struct FakeNbtHeaderInserter<'a, R: Read> {
     skip_state: (usize, usize),
-    inner: R,
+    inner: &'a mut R,
 }
 
-impl<R: Read> Read for FakeNbtHeaderInserter<R> {
+impl<'a, R: Read> FakeNbtHeaderInserter<'a, R> {
+    pub fn into_inner(self) -> &'a mut R {
+        self.inner
+    }
+}
+
+impl<'a, R: Read> Read for FakeNbtHeaderInserter<'a, R> {
     fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize> {
         match self.skip_state {
             (0, _) => {
@@ -486,7 +487,7 @@ impl<R: Read> Read for FakeNbtHeaderInserter<R> {
     }
 }
 
-pub fn strip_fake_nbt_header<W: Write>(writer: W) -> FakeNbtHeaderStripper<W> {
+pub fn strip_fake_nbt_header<W: Write>(writer: &mut W) -> FakeNbtHeaderStripper<W> {
     FakeNbtHeaderStripper {
         inner: writer,
         cursor: 0,
@@ -496,7 +497,7 @@ pub fn strip_fake_nbt_header<W: Write>(writer: W) -> FakeNbtHeaderStripper<W> {
     }
 }
 
-pub fn insert_fake_nbt_header<R: Read>(reader: R) -> FakeNbtHeaderInserter<R> {
+pub fn insert_fake_nbt_header<R: Read>(reader: &mut R) -> FakeNbtHeaderInserter<R> {
     FakeNbtHeaderInserter {
         skip_state: (0, 0),
         inner: reader,
