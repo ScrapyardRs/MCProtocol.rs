@@ -308,28 +308,28 @@ auto_string!(ResourceLocation, 32767);
 #[derive(mc_serializer_derive::Serial, Debug)]
 #[key(u8)]
 pub enum Difficulty {
-    #[key(0)]
+    #[key(0u8)]
     Peaceful,
-    #[key(1)]
+    #[key(1u8)]
     Easy,
-    #[key(2)]
+    #[key(2u8)]
     Normal,
-    #[key(3)]
+    #[key(3u8)]
     Hard,
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 #[key(u8)]
 pub enum GameType {
-    #[key(255)]
+    #[key(255u8)]
     None,
-    #[key(0)]
+    #[key(0u8)]
     Survival,
-    #[key(1)]
+    #[key(1u8)]
     Creative,
-    #[key(2)]
+    #[key(2u8)]
     Adventure,
-    #[key(3)]
+    #[key(3u8)]
     Spectator,
 }
 
