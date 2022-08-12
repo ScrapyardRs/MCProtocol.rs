@@ -5,10 +5,10 @@ extern crate syn;
 use syn::{Data, DeriveInput};
 
 mod bitmap;
+mod directives;
 mod enums;
 mod fields;
 mod structs;
-mod directives;
 
 const PREFIX: &str = "__serde_";
 
@@ -23,7 +23,19 @@ pub fn derive_serial_bitmap(item: proc_macro::TokenStream) -> proc_macro::TokenS
     }
 }
 
-#[proc_macro_derive(Serial, attributes(key, serial_if, nbt, json, default, after))]
+#[proc_macro_derive(
+    Serial,
+    attributes(
+        key,
+        serial_if,
+        serialize_if,
+        deserialize_if,
+        nbt,
+        json,
+        default,
+        after
+    )
+)]
 pub fn derive_mc_serde(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let derive_input = syn::parse_macro_input!(item as DeriveInput);
 

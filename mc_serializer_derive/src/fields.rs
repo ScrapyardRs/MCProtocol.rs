@@ -19,7 +19,7 @@ impl Default for SerialType {
 #[derive(Default)]
 pub(crate) struct SerialConfig {
     serial_type: SerialType,
-    conditional: Option<TokenStream>,
+    conditional: (Option<TokenStream>, Option<TokenStream>),
     default: Option<TokenStream>,
     after_directive: AfterDirective,
 }
@@ -47,11 +47,23 @@ impl SerialConfig {
                 )
             }
             "serial_if" => {
-                self.conditional = Some(
-                    attribute
-                        .parse_args()
-                        .expect("Please provide a conditional for the `serial_if` operator."),
-                )
+                let parsed = attribute
+                    .parse_args::<TokenStream>()
+                    .expect("Please provide a conditional for the `serial_if` operator.");
+                let parsed_clone = parsed.clone();
+                self.conditional = (Some(parsed), Some(parsed_clone));
+            }
+            "deserialize_if" => {
+                let parsed = attribute
+                    .parse_args::<TokenStream>()
+                    .expect("Please provide a conditional for the `serial_if` operator.");
+                self.conditional.1 = Some(parsed);
+            }
+            "serialize_if" => {
+                let parsed = attribute
+                    .parse_args::<TokenStream>()
+                    .expect("Please provide a conditional for the `serial_if` operator.");
+                self.conditional.0 = Some(parsed);
             }
             "default" => {
                 self.default = Some(
@@ -126,11 +138,7 @@ impl SerialContext {
         }
     }
 
-    fn serializer_short(
-        &self,
-        struct_context: &TokenStream,
-        raw: TokenStream,
-    ) -> TokenStream {
+    fn serializer_short(&self, struct_context: &TokenStream, raw: TokenStream) -> TokenStream {
         let real_field_ident = &self.field_name;
 
         let serializer_base = quote::quote! {
@@ -143,6 +151,7 @@ impl SerialContext {
 
         self.marker
             .conditional
+            .0
             .as_ref()
             .map(|conditional| {
                 let serializer_base = serializer_base.to_token_stream();
@@ -250,6 +259,7 @@ impl SerialContext {
         let tokens = self
             .marker
             .conditional
+            .1
             .as_ref()
             .map(|conditional| {
                 let serializer_base = serializer_base.to_token_stream();

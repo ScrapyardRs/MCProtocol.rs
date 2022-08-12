@@ -112,9 +112,12 @@ pub struct AddPlayerEntry {
     pub profile: GameProfile,
     pub game_type: GameType,
     pub latency: VarInt,
+    pub has_display_name: bool,
+    #[serialize_if(*__serde_has_display_name)]
+    #[deserialize_if(__serde_has_display_name)]
     #[json(262144)]
-    pub display_name: Chat,
-    pub key_data: MCIdentifiedKey,
+    pub display_name: Option<Chat>,
+    pub key_data: (bool, Option<MCIdentifiedKey>),
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
@@ -132,8 +135,11 @@ pub struct UpdateLatencyEntry {
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct UpdateDisplayNameEntry {
     pub uuid: uuid::Uuid,
+    pub has_display_name: bool,
+    #[serialize_if(*__serde_has_display_name)]
+    #[deserialize_if(__serde_has_display_name)]
     #[json(262144)]
-    pub display_name: Chat,
+    pub display_name: Option<Chat>,
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]

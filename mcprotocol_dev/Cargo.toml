@@ -13,6 +13,7 @@ mc_registry_derive = { path = "../mc_registry_derive", version = "0.1.0" }
 mc_buffer = { path = "../mc_buffer", version = "0.1.0" }
 mc_chat = { path = "../mc_chat", version = "0.1.0" }
 mc_level = { path = "../mc_level", version = "0.1.0" }
+mc_commands = { path = "../mc_commands", version = "0.1.0" }
 serde_derive = "1.0.140"
 serde = "1.0.140"
 bytes = "1.2.1"
