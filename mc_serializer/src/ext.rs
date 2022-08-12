@@ -308,13 +308,17 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
         if buf.len() == self.cursor {
             return Ok(0);
         }
+        println!("FAKE NBT HEADER STRIPPER: ({}, {})", buf.len(), self.cursor);
 
         match self.skip_state {
             (0, _) => {
+                println!("Skip state 0");
                 self.cursor += buf.len().min(1); // consume
+                println!("Next cursor {}", self.cursor);
                 if self.cursor == 0 {
                     Ok(0)
                 } else {
+                    println!("Skip state up");
                     self.skip_state = (1, 0);
                     self.handle_bytes(buf).map(|r| r + 1)
                 }
@@ -323,16 +327,19 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
                 // read in first byte
                 match buf.len() - self.cursor {
                     x if x >= 2 => {
+                        println!("Reading both length bytes.");
                         self.buf_to_forward.push(buf[self.cursor]);
                         self.buf_to_forward.push(buf[self.cursor + 1]);
                         self.skip_state = (
                             2,
                             u16::from_be_bytes([buf[self.cursor], buf[self.cursor + 1]]),
                         );
+                        println!("Post: {:?}", self.skip_state);
                         self.cursor += 2;
                         self.handle_bytes(buf).map(|r| r + 2)
                     }
                     1 => {
+                        println!("Forwarding byte.");
                         self.buf_to_forward.push(buf[self.cursor]);
                         self.prep_bytes = Some(buf[self.cursor]);
                         Ok(1)
@@ -341,6 +348,7 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
                 }
             }
             (1, _) => {
+                println!("Reading forwarded byte!");
                 self.buf_to_forward.push(buf[0]);
                 self.skip_state = (2, u16::from_be_bytes([self.prep_bytes.unwrap(), buf[0]]));
                 self.handle_bytes(buf).map(|r| r + 1)
@@ -352,6 +360,7 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
             // buffer the string send - it isn't skipped if 0x00
             // so we must consume it early for "under reads"
             (2, to_read) => {
+                println!("Reading in string.");
                 let available_read = buf.len().min(to_read as usize) - self.cursor;
                 self.cursor += available_read;
                 self.buf_to_forward
@@ -361,12 +370,15 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
                 } else {
                     self.skip_state = (2, to_read - available_read as u16);
                 }
+                println!("Wrote bytes: {}", available_read);
                 self.handle_bytes(buf).map(|r| r + available_read)
             }
             (3, _) => {
+                println!("Reading true header.");
                 let heading_value = buf[self.cursor];
                 match heading_value {
                     0x0a => {
+                        println!("Compound tag!");
                         if self.inner.write(&[0x0a])? == 1 {
                             self.skip_state = (4, 0);
                             self.handle_bytes(buf).map(|r| r + 1)
@@ -375,6 +387,7 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
                         }
                     }
                     0x00 => {
+                        println!("Null...");
                         if self.inner.write(&[0x00])? == 1 {
                             self.skip_state = (5, 0);
                             Ok(1)
@@ -389,8 +402,10 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
                 }
             }
             (4, _) => {
+                println!("Writing string buffer.");
                 self.inner.write_all(&self.buf_to_forward)?;
                 self.inner.write_all(&buf[self.cursor..])?;
+                println!("Wrote size: {}", buf[self.cursor..].len());
                 Ok(buf[self.cursor..].len())
             }
             (5, 0) => self.inner.write(buf),
