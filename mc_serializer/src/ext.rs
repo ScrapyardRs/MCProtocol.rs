@@ -330,6 +330,7 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
                         println!("Reading both length bytes.");
                         self.buf_to_forward.push(buf[self.cursor]);
                         self.buf_to_forward.push(buf[self.cursor + 1]);
+                        println!("Pushing buffer. {:?}", self.buf_to_forward);
                         self.skip_state = (
                             2,
                             u16::from_be_bytes([buf[self.cursor], buf[self.cursor + 1]]),
@@ -417,7 +418,9 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
 impl<'a, W: Write> Write for FakeNbtHeaderStripper<'a, W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.cursor = 0;
-        self.handle_bytes(buf)
+        let x = self.handle_bytes(buf)?;
+        println!("Writing {} out of {}", x, buf.len());
+        Ok(x)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
