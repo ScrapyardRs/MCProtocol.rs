@@ -17,5 +17,5 @@ serde = "1.0.138"
 mc_chat = { path = "../mc_chat", version = "0.1.0" }
 mc_level = { path = "../mc_level", version = "0.1.0" }
 mc_commands = { path = "../mc_commands", version = "0.1.0" }
-hematite-nbt = "0.5.2"
+hematite-nbt = { git = "https://github.com/CoreyShupe/hematite_nbt", branch = "feature/allow-quick-exit", version = "*" }
 serde_json = "1.0.83"

@@ -1,7 +1,8 @@
 use bytes::Buf;
 use futures::future::BoxFuture;
+use mc_buffer::buffer::PacketReader;
 use mc_buffer::buffer::{OwnedPacketReader, PacketReaderGeneric};
-use mc_buffer::encryption::Compressor;
+use mc_buffer::encryption::{Codec, Compressor};
 use mc_chat::Chat;
 use mc_registry::client_bound::login::{LoginSuccess, SetCompression};
 use mc_registry::client_bound::play::{
@@ -17,7 +18,7 @@ use mc_registry::server_bound::login::LoginStart;
 use mc_registry::server_bound::play::Pong;
 use mc_registry::shared_types::login::LoginUsername;
 use mc_registry::shared_types::play::ResourceLocation;
-use mc_serializer::ext::write_nbt;
+use mc_serializer::ext::{read_nbt, write_nbt};
 use mc_serializer::primitive::{read_string, Identifier};
 use mc_serializer::serde::ProtocolVersion;
 use std::io::Cursor;
@@ -113,7 +114,12 @@ fn handle_set_compression(packet: SetCompression, _context: LockedContext<Test>)
 fn handle_join_game(packet: JoinGame, _context: LockedContext<Test>) {
     let mut bytes = Vec::new();
     write_nbt(&packet.codec, &mut bytes, ProtocolVersion::V119_1)?;
-    println!("Join Game: {:#?}", packet);
+    let mut bytes = Cursor::new(bytes);
+    let codec: mc_level::codec::Codec = read_nbt(&mut bytes, ProtocolVersion::V119_1)?;
+
+    println!("In: {:?}\nOut: {:?}", &packet.codec, codec);
+
+    // println!("Join Game: {:#?}", packet);
 }
 
 #[mc_registry_derive::packet_handler]
@@ -145,7 +151,7 @@ fn handle_set_carried_item(packet: SetCarriedItem, _context: LockedContext<Test>
 #[mc_registry_derive::packet_handler]
 fn handle_update_recipes(packet: UpdateRecipes, _context: LockedContext<Test>) {
     // println!("Update Recipes: {:#?}", packet);
-    println!("Example Recipe: {:#?}", packet.recipes.1.first().unwrap());
+    // println!("Example Recipe: {:#?}", packet.recipes.1.first().unwrap());
 }
 
 #[allow(unreachable_code)]

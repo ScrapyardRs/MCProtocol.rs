@@ -379,20 +379,20 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
                 let heading_value = buf[self.cursor];
                 self.cursor += 1;
                 match heading_value {
-                    0x0a => {
-                        println!("Compound tag!");
-                        if self.inner.write(&[0x0a])? == 1 {
-                            self.skip_state = (4, 0);
-                            self.handle_bytes(buf).map(|r| r + 1)
-                        } else {
-                            Ok(0)
-                        }
-                    }
                     0x00 => {
                         println!("Null...");
                         if self.inner.write(&[0x00])? == 1 {
                             self.skip_state = (5, 0);
                             Ok(1)
+                        } else {
+                            Ok(0)
+                        }
+                    }
+                    x => {
+                        println!("Read Tag: {}", x);
+                        if self.inner.write(&[x])? == 1 {
+                            self.skip_state = (4, 0);
+                            self.handle_bytes(buf).map(|r| r + 1)
                         } else {
                             Ok(0)
                         }
