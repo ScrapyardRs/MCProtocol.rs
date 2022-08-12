@@ -191,7 +191,7 @@ pub struct DeclareRecipes {
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct DeclareCommands {
-    pub commands: Vec<Command>,
+    pub commands: (VarInt, Vec<Command>),
     pub root_index: VarInt,
 }
 
