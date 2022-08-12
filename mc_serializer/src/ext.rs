@@ -377,6 +377,7 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
             (3, _) => {
                 println!("Reading true header.");
                 let heading_value = buf[self.cursor];
+                self.cursor += 1;
                 match heading_value {
                     0x0a => {
                         println!("Compound tag!");
@@ -403,7 +404,7 @@ impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
                 }
             }
             (4, _) => {
-                println!("Writing string buffer.");
+                println!("Writing string buffer. {}", self.cursor);
                 self.inner.write_all(&self.buf_to_forward)?;
                 self.inner.write_all(&buf[self.cursor..])?;
                 println!("Wrote size: {}", buf[self.cursor..].len());
