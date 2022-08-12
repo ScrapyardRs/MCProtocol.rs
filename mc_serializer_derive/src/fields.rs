@@ -157,8 +157,12 @@ impl SerialContext {
             SerialType::Default => {
                 quote::quote!(mc_serializer::serde::Serialize::serialize(#field_ident, writer, protocol_version))
             }
-            SerialType::Nbt(_) => {
-                quote::quote!(mc_serializer::ext::write_nbt(#field_ident, writer, protocol_version))
+            SerialType::Nbt(strip_header) => {
+                if *strip_header {
+                    quote::quote!(mc_serializer::ext::write_nbt(#field_ident, &mut mc_serializer::ext::strip_fake_nbt_header(writer), protocol_version))
+                } else {
+                    quote::quote!(mc_serializer::ext::write_nbt(#field_ident, writer, protocol_version))
+                }
             }
             SerialType::Json(max_length_tokens) => {
                 quote::quote!(mc_serializer::ext::write_json(#max_length_tokens, #field_ident, writer, protocol_version))
@@ -183,8 +187,12 @@ impl SerialContext {
             SerialType::Default => {
                 quote::quote!(size += mc_serializer::serde::Serialize::size(#field_ident, protocol_version))
             }
-            SerialType::Nbt(_inject_header) => {
-                quote::quote!(size += mc_serializer::ext::size_nbt(#field_ident, protocol_version))
+            SerialType::Nbt(strip_header) => {
+                if *strip_header {
+                    quote::quote!(size += mc_serializer::ext::size_stripped_nbt(#field_ident, protocol_version))
+                } else {
+                    quote::quote!(size += mc_serializer::ext::size_nbt(#field_ident, protocol_version))
+                }
             }
             SerialType::Json(_) => {
                 quote::quote!(size += mc_serializer::ext::size_json(#field_ident, protocol_version))

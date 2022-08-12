@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::io::{Cursor, ErrorKind, Read, Write};
 
-
 impl<T: Contextual> Contextual for (VarInt, Vec<T>) {
     fn context() -> String {
         format!("({}, {})", VarInt::context(), Vec::<T>::context())
@@ -273,6 +272,15 @@ where
     Ok(sizer.current_size())
 }
 
+pub fn size_stripped_nbt<T>(value: &T, protocol_version: ProtocolVersion) -> Result<i32>
+where
+    T: Contextual + serde::ser::Serialize,
+{
+    let mut sizer = strip_fake_nbt_header(InternalSizer::default());
+    write_nbt(value, &mut sizer, protocol_version)?;
+    Ok(sizer.into_inner().current_size())
+}
+
 pub fn read_nbt<T, R: Read>(reader: &mut R, _: ProtocolVersion) -> Result<T>
 where
     T: Contextual + for<'de> serde::de::Deserialize<'de>,
@@ -286,10 +294,130 @@ impl<K: Contextual, V: Contextual> Contextual for HashMap<K, V> {
     }
 }
 
+pub struct FakeNbtHeaderStripper<W: Write> {
+    inner: W,
+    cursor: usize,
+    skip_state: (i32, u16),
+    prep_bytes: Option<u8>,
+    buf_to_forward: Vec<u8>,
+}
+
+impl<W: Write> FakeNbtHeaderStripper<W> {
+    pub fn into_inner(self) -> W {
+        self.inner
+    }
+}
+
+impl<W: Write> FakeNbtHeaderStripper<W> {
+    fn handle_bytes(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if buf.len() == self.cursor {
+            return Ok(0);
+        }
+
+        match self.skip_state {
+            (0, _) => {
+                self.cursor += buf.len().min(1); // consume
+                if self.cursor == 0 {
+                    Ok(0)
+                } else {
+                    self.skip_state = (1, 0);
+                    self.handle_bytes(buf).map(|r| r + 1)
+                }
+            }
+            (1, _) if matches!(self.prep_bytes, None) => {
+                // read in first byte
+                match buf.len() - self.cursor {
+                    x if x >= 2 => {
+                        self.buf_to_forward.push(buf[self.cursor]);
+                        self.buf_to_forward.push(buf[self.cursor + 1]);
+                        self.skip_state = (
+                            2,
+                            u16::from_be_bytes([buf[self.cursor], buf[self.cursor + 1]]),
+                        );
+                        self.cursor += 2;
+                        self.handle_bytes(buf).map(|r| r + 2)
+                    }
+                    1 => {
+                        self.buf_to_forward.push(buf[self.cursor]);
+                        self.prep_bytes = Some(buf[self.cursor]);
+                        Ok(1)
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            (1, _) => {
+                self.buf_to_forward.push(buf[0]);
+                self.skip_state = (2, u16::from_be_bytes([self.prep_bytes.unwrap(), buf[0]]));
+                self.handle_bytes(buf).map(|r| r + 1)
+            }
+            // here we're reading the string in preparation
+            // after the string we'll read either a 0x00 or a 0x0a
+            // in the case of a 0x00 we must forward a 0x00 immediately
+            // and close, the nbt writer should handle that, we just need to
+            // buffer the string send - it isn't skipped if 0x00
+            // so we must consume it early for "under reads"
+            (2, to_read) => {
+                let available_read = buf.len().min(to_read as usize) - self.cursor;
+                self.cursor += available_read;
+                self.buf_to_forward
+                    .extend_from_slice(&buf[self.cursor..self.cursor + available_read]);
+                if available_read as u16 == to_read {
+                    self.skip_state = (3, 0);
+                } else {
+                    self.skip_state = (2, to_read - available_read as u16);
+                }
+                self.handle_bytes(buf).map(|r| r + available_read)
+            }
+            (3, _) => {
+                let heading_value = buf[self.cursor];
+                match heading_value {
+                    0x0a => {
+                        if self.inner.write(&[0x0a])? == 1 {
+                            self.skip_state = (4, 0);
+                            self.handle_bytes(buf).map(|r| r + 1)
+                        } else {
+                            Ok(0)
+                        }
+                    }
+                    0x00 => {
+                        if self.inner.write(&[0x00])? == 1 {
+                            self.skip_state = (5, 0);
+                            Ok(1)
+                        } else {
+                            Ok(0)
+                        }
+                    }
+                    _ => Err(std::io::Error::new(
+                        ErrorKind::InvalidInput,
+                        "Invalid value coming from internal mapper.",
+                    )),
+                }
+            }
+            (4, _) => {
+                self.inner.write_all(&self.buf_to_forward)?;
+                self.inner.write_all(&buf[self.cursor..])?;
+                Ok(buf[self.cursor..].len())
+            }
+            (5, 0) => self.inner.write(buf),
+            _ => Ok(0),
+        }
+    }
+}
+
+impl<W: Write> Write for FakeNbtHeaderStripper<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.cursor = 0;
+        self.handle_bytes(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 pub struct FakeNbtHeaderInserter<R: Read> {
     skip_state: (usize, usize),
     inner: R,
-    prepped_tag_type: u8,
 }
 
 impl<R: Read> Read for FakeNbtHeaderInserter<R> {
@@ -300,6 +428,22 @@ impl<R: Read> Read for FakeNbtHeaderInserter<R> {
                 let written = buf.write(&[0x0a])?;
                 if written == 1 {
                     self.skip_state = (1, 0);
+                } else {
+                    return Ok(0);
+                }
+                let mut inner_read: [u8; 1] = [0];
+                let inner_read_size = self.inner.read(&mut inner_read)?;
+                if inner_read_size == 0 {
+                    return Ok(0);
+                }
+                let intended_state = inner_read[0];
+                if intended_state == 0x0A {
+                    self.skip_state = (4, 0);
+                } else if intended_state != 0x00 {
+                    return Err(std::io::Error::new(
+                        ErrorKind::InvalidInput,
+                        format!("Invalid tag type: {}", intended_state),
+                    ));
                 }
                 Ok(written)
             }
@@ -326,42 +470,11 @@ impl<R: Read> Read for FakeNbtHeaderInserter<R> {
                 Ok(written)
             }
             (3, _) => {
-                // process intended tag type
-                let mut read_in = [0u8; 1];
-                let read_in_size = self.inner.read(&mut read_in)?;
-                if read_in_size == 1 {
-                    self.prepped_tag_type = read_in[0];
-
-                    if self.prepped_tag_type == 0x00 {
-                        buf.write(&[0x00])
-                    } else if self.prepped_tag_type != 0xA {
-                        Err(std::io::Error::new(
-                            ErrorKind::InvalidData,
-                            format!("Invalid prepped tag type: {}", self.prepped_tag_type),
-                        ))
-                    } else {
-                        // read in a string
-                        let mut len_buf = [0u8; 2];
-                        let written = self.inner.read(&mut len_buf)?;
-                        match written {
-                            0 => return Ok(0),
-                            1 => panic!("Invalid read, unframed."),
-                            _ => (),
-                        };
-                        let len = u16::from_be_bytes(len_buf) as usize;
-                        let mut len_buf = vec![0u8; len];
-                        let written = self.inner.read(&mut len_buf)?;
-                        match written {
-                            x if x == 0 && x != len => return Ok(0),
-                            x if x == len => (),
-                            _ => panic!("Invalid read, unframed."),
-                        };
-
-                        self.skip_state = (4, 0);
-                        self.read(buf)
-                    }
-                } else {
+                if buf.write(&[0x00])? == 0 {
                     Ok(0)
+                } else {
+                    self.skip_state = (4, 0);
+                    Ok(1)
                 }
             }
             (4, _) => {
@@ -373,11 +486,20 @@ impl<R: Read> Read for FakeNbtHeaderInserter<R> {
     }
 }
 
+pub fn strip_fake_nbt_header<W: Write>(writer: W) -> FakeNbtHeaderStripper<W> {
+    FakeNbtHeaderStripper {
+        inner: writer,
+        cursor: 0,
+        skip_state: (0, 0),
+        prep_bytes: None,
+        buf_to_forward: vec![],
+    }
+}
+
 pub fn insert_fake_nbt_header<R: Read>(reader: R) -> FakeNbtHeaderInserter<R> {
     FakeNbtHeaderInserter {
         skip_state: (0, 0),
         inner: reader,
-        prepped_tag_type: 0,
     }
 }
 
