@@ -4,7 +4,9 @@ pub struct MonsterSpawnLightLevelRange {
     pub min_inclusive: i8,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 #[serde(untagged)]
 pub enum MonsterSpawnLightLevel {
     Complex {
@@ -16,7 +18,9 @@ pub enum MonsterSpawnLightLevel {
     ByteCoverage(i8),
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftDimensionTypeElement {
     pub respawn_anchor_works: i8,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -39,7 +43,9 @@ pub struct MinecraftDimensionTypeElement {
     pub height: i16,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftDimensionTypeEntry {
     pub id: i8,
     pub name: String,
@@ -47,26 +53,34 @@ pub struct MinecraftDimensionTypeEntry {
 }
 pub type MinecraftDimensionTypeEntries = Vec<MinecraftDimensionTypeEntry>;
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftDimensionType {
     pub value: MinecraftDimensionTypeEntries,
     #[serde(rename = "type")]
     pub type_inner: String,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftWorldgenBiomeOptions {
     #[serde(rename = "type")]
     pub type_inner: String,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftWorldgenBiomeParticle {
     pub options: MinecraftWorldgenBiomeOptions,
     pub probability: f32,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftWorldgenBiomeMusic {
     pub min_delay: i16,
     pub sound: String,
@@ -74,20 +88,26 @@ pub struct MinecraftWorldgenBiomeMusic {
     pub max_delay: i16,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftWorldgenBiomeAdditionsSound {
     pub tick_chance: f32,
     pub sound: String,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 #[serde(untagged)]
 pub enum MinecraftWorldgenBiomeSkyColor {
     IntCoverage(i32),
     ByteCoverage(i8),
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftWorldgenBiomeMoodSound {
     pub sound: String,
     pub block_search_extent: i8,
@@ -95,7 +115,9 @@ pub struct MinecraftWorldgenBiomeMoodSound {
     pub tick_delay: i16,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftWorldgenBiomeEffects {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub particle: Option<MinecraftWorldgenBiomeParticle>,
@@ -118,7 +140,9 @@ pub struct MinecraftWorldgenBiomeEffects {
     pub mood_sound: MinecraftWorldgenBiomeMoodSound,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftWorldgenBiomeElement {
     pub downfall: f32,
     pub temperature: f32,
@@ -128,7 +152,9 @@ pub struct MinecraftWorldgenBiomeElement {
     pub effects: MinecraftWorldgenBiomeEffects,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftWorldgenBiomeEntry {
     pub element: MinecraftWorldgenBiomeElement,
     pub name: String,
@@ -136,14 +162,18 @@ pub struct MinecraftWorldgenBiomeEntry {
 }
 pub type MinecraftWorldgenBiomeEntries = Vec<MinecraftWorldgenBiomeEntry>;
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftWorldgenBiome {
     pub value: MinecraftWorldgenBiomeEntries,
     #[serde(rename = "type")]
     pub type_inner: String,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftChatTypeStyle {
     pub italic: i8,
     pub color: String,
@@ -151,7 +181,9 @@ pub struct MinecraftChatTypeStyle {
 
 pub type MinecraftChatTypeParameters = Vec<String>;
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftChatTypeChat {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<MinecraftChatTypeStyle>,
@@ -161,19 +193,25 @@ pub struct MinecraftChatTypeChat {
 
 pub type MinecraftChatTypeElementParameters = Vec<String>;
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftChatTypeElementNarration {
     pub parameters: MinecraftChatTypeElementParameters,
     pub translation_key: String,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftChatTypeElement {
     pub chat: MinecraftChatTypeChat,
     pub narration: MinecraftChatTypeElementNarration,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftChatTypeEntry {
     pub element: MinecraftChatTypeElement,
     pub id: i8,
@@ -181,14 +219,18 @@ pub struct MinecraftChatTypeEntry {
 }
 pub type MinecraftChatTypeEntries = Vec<MinecraftChatTypeEntry>;
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct MinecraftChatType {
     pub value: MinecraftChatTypeEntries,
     #[serde(rename = "type")]
     pub type_inner: String,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
+#[derive(
+    mc_serializer_derive::Contextual, serde_derive::Serialize, serde_derive::Deserialize, Debug,
+)]
 pub struct Codec {
     #[serde(rename = "minecraft:dimension_type")]
     pub dimension_registry: MinecraftDimensionType,

@@ -9,6 +9,5 @@ hematite-nbt = { git = "https://github.com/CoreyShupe/hematite_nbt", branch = "f
 serde = "1.0.140"
 serde_json = "1.0.82"
 uuid = "1.1.2"
-mc_level = { path = "../mc_level", version = "0.1.0" }
 cesu8 = "1.1.0"
 paste = "1.0.8"

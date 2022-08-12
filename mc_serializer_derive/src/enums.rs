@@ -143,6 +143,106 @@ impl VariantWrapper {
     }
 }
 
+macro_rules! variant_def {
+    ($ident:ident) => {
+        let mut $ident = Some(quote::quote!(
+            return Err(mc_serializer::serde::Error::Generic(
+                mc_serializer::serde::SerializerContext::new(
+                    Self::context(),
+                    format!("Failed to read key {:?} as a valid option.", key_value)
+                )
+            ))
+        ));
+    };
+}
+
+macro_rules! key_deser {
+    ($ident:ident, $passthrough:ident, $key_type:ident, $enum_ident:ident) => {
+        let $ident = if $passthrough {
+            None
+        } else {
+            Some(quote::quote! {
+                let key_value = <#$key_type>::deserialize(reader, protocol_version).map_err(|err|
+                    err.update_context(|ctx| {
+                        ctx.current_struct(format!("{}", stringify!(#$enum_ident))).current_field(format!("{}", stringify!(key)));
+                    })
+                )?;
+            })
+        };
+    }
+}
+
+pub fn expand_deserialize_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) -> TokenStream {
+    let enum_ident = &derive_input.ident;
+
+    let key_type = parse_key_type(&derive_input.ident, &derive_input.attrs);
+
+    let passthrough_key = key_type.to_string().eq("pass");
+
+    let mut variant_deserializers = Vec::new();
+    variant_def!(variant_default);
+
+    for variant in &syn_enum.variants {
+        let variant_wrapper = VariantWrapper::new(enum_ident, variant);
+        variant_deserializers.push(variant_wrapper.deserializer());
+        if variant_wrapper.is_default {
+            variant_default = Some(variant_wrapper.deserializer_raw());
+        }
+    }
+
+    key_deser!(key_value_deserializer, passthrough_key, key_type, enum_ident);
+
+    quote::quote! {
+        impl mc_serializer::serde::Deserialize for #enum_ident {
+            fn deserialize<R: std::io::Read>(
+                reader: &mut R,
+                protocol_version: mc_serializer::serde::ProtocolVersion,
+            ) -> mc_serializer::serde::Result<Self> {
+                #key_value_deserializer
+                #(#variant_deserializers)*
+                #variant_default
+            }
+        }
+    }
+}
+
+pub fn expand_serialize_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) -> TokenStream {
+    let enum_ident = &derive_input.ident;
+
+    let key_type = parse_key_type(&derive_input.ident, &derive_input.attrs);
+
+    let passthrough_key = key_type.to_string().eq("pass");
+
+    let mut variant_serializers = Vec::new();
+    let mut variant_sizers = Vec::new();
+
+    for variant in &syn_enum.variants {
+        let variant_wrapper = VariantWrapper::new(enum_ident, variant);
+        variant_serializers.push(variant_wrapper.serializer(passthrough_key));
+        variant_sizers.push(variant_wrapper.sizer(passthrough_key));
+    }
+
+    quote::quote! {
+        impl mc_serializer::serde::Serialize for #enum_ident {
+            fn serialize<W: std::io::Write>(
+                    &self,
+                    writer: &mut W,
+                    protocol_version: mc_serializer::serde::ProtocolVersion,
+                ) -> mc_serializer::serde::Result<()> {
+                match self {
+                    #(#variant_serializers)*
+                }
+            }
+
+            fn size(&self, protocol_version: mc_serializer::serde::ProtocolVersion) -> mc_serializer::serde::Result<i32> {
+                match self {
+                    #(#variant_sizers)*
+                }
+            }
+        }
+    }
+}
+
 pub fn expand_serial_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) -> TokenStream {
     let enum_ident = &derive_input.ident;
 
@@ -153,14 +253,7 @@ pub fn expand_serial_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) -> To
     let mut variant_serializers = Vec::new();
     let mut variant_sizers = Vec::new();
     let mut variant_deserializers = Vec::new();
-    let mut variant_default = Some(quote::quote!(
-        return Err(mc_serializer::serde::Error::Generic(
-            mc_serializer::serde::SerializerContext::new(
-                Self::context(),
-                format!("Failed to read key {:?} as a valid option.", key_value)
-            )
-        ))
-    ));
+    variant_def!(variant_default);
 
     for variant in &syn_enum.variants {
         let variant_wrapper = VariantWrapper::new(enum_ident, variant);

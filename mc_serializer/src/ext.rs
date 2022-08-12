@@ -6,11 +6,11 @@ use crate::serde::{
 use crate::{wrap_indexed_struct_context, wrap_struct_context};
 use bytes::Buf;
 
-use mc_level::codec::Codec;
-
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::io::{Cursor, ErrorKind, Read, Write};
+use nbt::ser::Encoder;
+use serde::Serializer;
 
 impl<T: Contextual> Contextual for (VarInt, Vec<T>) {
     fn context() -> String {
@@ -620,12 +620,6 @@ impl<T: Serialize> Serialize for Box<T> {
 impl<T: Deserialize> Deserialize for Box<T> {
     fn deserialize<R: Read>(reader: &mut R, protocol_version: ProtocolVersion) -> Result<Self> {
         T::deserialize(reader, protocol_version).map(Box::new)
-    }
-}
-
-impl Contextual for Codec {
-    fn context() -> String {
-        "Codec".to_string()
     }
 }
 
