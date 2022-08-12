@@ -73,7 +73,7 @@ pub struct BlockEntityInfo {
 pub struct LevelChunkData {
     pub heightmaps: nbt::Blob,
     pub buffer: (VarInt, Vec<u8>),
-    pub block_entities: Vec<BlockEntityInfo>,
+    pub block_entities: (VarInt, Vec<BlockEntityInfo>),
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
@@ -151,15 +151,15 @@ pub struct RemovePlayerEntry {
 #[key(VarInt)]
 pub enum PlayerInfo {
     #[key(VarInt::from(0))]
-    AddPlayer(Vec<AddPlayerEntry>),
+    AddPlayer((VarInt, Vec<AddPlayerEntry>)),
     #[key(VarInt::from(1))]
-    UpdateGameMode(Vec<UpdateGameModeEntry>),
+    UpdateGameMode((VarInt, Vec<UpdateGameModeEntry>)),
     #[key(VarInt::from(2))]
-    UpdateLatency(Vec<UpdateLatencyEntry>),
+    UpdateLatency((VarInt, Vec<UpdateLatencyEntry>)),
     #[key(VarInt::from(3))]
-    UpdateDisplayName(Vec<UpdateDisplayNameEntry>),
+    UpdateDisplayName((VarInt, Vec<UpdateDisplayNameEntry>)),
     #[key(VarInt::from(4))]
-    RemovePlayer(Vec<RemovePlayerEntry>),
+    RemovePlayer((VarInt, Vec<RemovePlayerEntry>)),
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
