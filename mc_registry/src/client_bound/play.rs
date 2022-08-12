@@ -169,14 +169,14 @@ pub enum RecipeState {
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct RecipeBookSettings {
-    crafting_open: bool,
-    crafting_filtering: bool,
-    furnace_open: bool,
-    furnace_filtering: bool,
-    blast_furnace_open: bool,
-    blast_furnace_filtering: bool,
-    smoker_open: bool,
-    smoker_filtering: bool,
+    pub crafting_open: bool,
+    pub crafting_filtering: bool,
+    pub furnace_open: bool,
+    pub furnace_filtering: bool,
+    pub blast_furnace_open: bool,
+    pub blast_furnace_filtering: bool,
+    pub smoker_open: bool,
+    pub smoker_filtering: bool,
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]

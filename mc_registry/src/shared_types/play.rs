@@ -11,7 +11,7 @@ use std::io::{Read, Write};
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Ingredient {
-    ingredients: (VarInt, Vec<ItemStackContainer>),
+    pub ingredients: (VarInt, Vec<ItemStackContainer>),
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
