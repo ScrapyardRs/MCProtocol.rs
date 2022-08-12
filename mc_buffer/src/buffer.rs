@@ -207,11 +207,14 @@ impl<T: PacketWriterGeneric> PacketWriter for T {
             let buffer = Packet::create_packet_buffer(self.protocol_version(), packet)?;
 
             let mut buffer = if let Some(compressor) = self.compression() {
+                println!("Compressed");
                 compressor.compress(buffer)?
             } else {
+                println!("Decompressed.");
                 Compressor::uncompressed(buffer)?
             };
 
+            println!("Encrypting bytes.");
             self.encrypt(&mut buffer);
 
             println!("Writing buffer {:?} to client.", buffer);
@@ -366,7 +369,7 @@ impl PacketWriterGeneric for OwnedPacketWriter {
 
     fn encrypt(&mut self, buffer: &mut Vec<u8>) {
         if let Some(decryption) = self.encryption.as_mut() {
-            decryption.decrypt(buffer)
+            decryption.encrypt(buffer)
         }
     }
 
