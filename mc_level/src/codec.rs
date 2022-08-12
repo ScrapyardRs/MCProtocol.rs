@@ -19,6 +19,7 @@ pub enum MonsterSpawnLightLevel {
 #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
 pub struct MinecraftDimensionTypeElement {
     pub respawn_anchor_works: i8,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fixed_time: Option<i16>,
     pub has_raids: i8,
     pub effects: String,
@@ -96,15 +97,22 @@ pub struct MinecraftWorldgenBiomeMoodSound {
 
 #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
 pub struct MinecraftWorldgenBiomeEffects {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub particle: Option<MinecraftWorldgenBiomeParticle>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ambient_sound: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub music: Option<MinecraftWorldgenBiomeMusic>,
     pub water_fog_color: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub grass_color: Option<i32>,
     pub fog_color: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub grass_color_modifier: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub foliage_color: Option<i32>,
     pub water_color: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub additions_sound: Option<MinecraftWorldgenBiomeAdditionsSound>,
     pub sky_color: MinecraftWorldgenBiomeSkyColor,
     pub mood_sound: MinecraftWorldgenBiomeMoodSound,
@@ -115,6 +123,7 @@ pub struct MinecraftWorldgenBiomeElement {
     pub downfall: f32,
     pub temperature: f32,
     pub precipitation: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature_modifier: Option<String>,
     pub effects: MinecraftWorldgenBiomeEffects,
 }
@@ -144,6 +153,7 @@ pub type MinecraftChatTypeParameters = Vec<String>;
 
 #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
 pub struct MinecraftChatTypeChat {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<MinecraftChatTypeStyle>,
     pub translation_key: String,
     pub parameters: MinecraftChatTypeParameters,
