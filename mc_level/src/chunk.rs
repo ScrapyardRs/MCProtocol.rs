@@ -414,14 +414,12 @@ pub struct HeightMaps {
         deserialize_with = "deserialize_heightmap_bitset",
         serialize_with = "serialize_heightmap_bitset"
     )]
-    #[serde(flatten)]
     world_surface: BitSet,
     #[serde(rename = "MOTION_BLOCKING")]
     #[serde(
         deserialize_with = "deserialize_heightmap_bitset",
         serialize_with = "serialize_heightmap_bitset"
     )]
-    #[serde(flatten)]
     motion_blocking: BitSet,
 }
 
