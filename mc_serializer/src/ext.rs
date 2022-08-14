@@ -434,7 +434,6 @@ pub enum BitSet {
     ZeroStorage {
         #[serde(skip)]
         size: i32,
-        #[serde(flatten)]
         #[serde(serialize_with = "nbt::i64_array")]
         raw: Vec<i64>,
     },
@@ -443,7 +442,6 @@ pub enum BitSet {
         size: i32,
         #[serde(skip)]
         bits: i32,
-        #[serde(flatten)]
         #[serde(serialize_with = "nbt::i64_array")]
         raw: Vec<i64>,
     },
@@ -839,6 +837,13 @@ impl BitSet {
                     + (raw.len() as i32 * 8)
             }
         })
+    }
+
+    pub fn get_raw(&self) -> Vec<i64> {
+        match self {
+            BitSet::ZeroStorage { raw, .. } => raw.clone(),
+            BitSet::SimpleStorage { raw, .. } => raw.clone(),
+        }
     }
 }
 

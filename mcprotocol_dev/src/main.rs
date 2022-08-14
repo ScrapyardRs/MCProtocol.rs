@@ -113,7 +113,7 @@ fn handle_login_success(
 
 #[mc_registry_derive::packet_handler]
 fn handle_player_position(packet: PlayerPosition, _context: LockedContext<Test>) {
-    println!("Player Position! {:?}", packet);
+    println!("Player Position");
 }
 
 #[mc_registry_derive::packet_handler]
@@ -121,57 +121,57 @@ fn handle_set_default_spawn_position(
     packet: SetDefaultSpawnPosition,
     _context: LockedContext<Test>,
 ) {
-    println!("Set Default Spawn Position! {:?}", packet);
+    println!("Set Default Spawn Position");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_world_border(packet: WorldBorder, _context: LockedContext<Test>) {
-    println!("WorldBorder! {:?}", packet);
+    println!("WorldBorder");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_light_update_with_chunk(packet: LevelChunkWithLight, _context: LockedContext<Test>) {
-    println!("Level chunk with light omitted for clarity!");
-    println!("Level chunk with light: {:?}", packet.data);
+    println!("Level chunk with light");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_light_update(packet: LightUpdate, _context: LockedContext<Test>) {
-    println!("Light update packet! omitted for clarity.");
+    println!("Light update packet");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_set_chunk_cache_center(packet: SetChunkCacheCenter, _context: LockedContext<Test>) {
-    println!("Set Chunk Cache Center! {:?}", packet);
+    println!("Set Chunk Cache Center");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_player_info(packet: PlayerInfo, _context: LockedContext<Test>) {
-    println!("Player Info! {:?}", packet);
+    println!("Player Info");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_declare_recipes(packet: DeclareRecipes, _context: LockedContext<Test>) {
-    println!("Declare Recipes! {:?}", packet);
+    println!("Declare Recipes");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_declare_commands(packet: DeclareCommands, _context: LockedContext<Test>) {
-    println!("Declare Commands! {:?}", packet);
+    println!("Declare Commands");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_entity_event(packet: EntityEvent, _context: LockedContext<Test>) {
-    println!("Entity Event! {:?}", packet);
+    println!("Entity Event");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_set_compression(packet: SetCompression, _context: LockedContext<Test>) {
-    println!("Set Compression! {:?}", packet);
+    println!("Set Compression");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_join_game(packet: JoinGame, _context: LockedContext<Test>) {
+    println!("Join Game");
     let mut bytes = Vec::new();
     write_nbt(&packet.codec, &mut bytes, ProtocolVersion::V119_1)?;
     let mut bytes = Cursor::new(bytes);
@@ -185,31 +185,31 @@ fn handle_plugin_message(packet: PluginMessage, _context: LockedContext<Test>) {
     if packet.identifier == ResourceLocation::from("minecraft:brand") {
         let mut cursor = Cursor::new(packet.data);
         let brand = read_string(32767, &mut cursor, ProtocolVersion::V119_1)?;
-        println!("Brand: {}", brand);
+        println!("Custom Payload Brand: {}", brand);
     } else {
-        println!("Custom Payload {}: {:#?}", packet.identifier, packet.data);
+        println!("Custom Payload {}", packet.identifier);
     }
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_change_difficult(packet: ChangeDifficulty, _context: LockedContext<Test>) {
-    println!("Change difficulty: {:#?}", packet);
+    println!("Change difficulty");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_player_abilities(packet: PlayerAbilities, _context: LockedContext<Test>) {
-    println!("Player Abilities: {:#?}", packet);
+    println!("Player Abilities");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_set_carried_item(packet: SetCarriedItem, _context: LockedContext<Test>) {
-    println!("Set Carried Item: {:#?}", packet);
+    println!("Set Carried Item");
 }
 
 #[mc_registry_derive::packet_handler]
 fn handle_update_recipes(packet: UpdateRecipes, _context: LockedContext<Test>) {
     // println!("Update Recipes: {:#?}", packet);
-    println!("Decompiled update recipes!");
+    println!("Update recipes.");
 }
 
 #[allow(unreachable_code)]
@@ -312,6 +312,18 @@ async fn main() -> anyhow::Result<()> {
                     continue;
                 }
                 if unhandled.packet_id == VarInt::from(84) { // set experience
+                    continue;
+                }
+                if unhandled.packet_id == VarInt::from(103) { // Update advancements
+                    continue;
+                }
+                if unhandled.packet_id == VarInt::from(40) { // Move entity pos
+                    continue;
+                }
+                if unhandled.packet_id == VarInt::from(41) { // Move entity pos rot
+                    continue;
+                }
+                if unhandled.packet_id == VarInt::from(42) { // Move entity rot
                     continue;
                 }
                 return Ok(());

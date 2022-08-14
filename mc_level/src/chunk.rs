@@ -5,7 +5,7 @@ use mc_serializer::primitive::VarInt;
 use mc_serializer::serde::{Contextual, Deserialize, ProtocolVersion, Serialize};
 use mc_serializer::{contextual, wrap_indexed_struct_context, wrap_struct_context};
 use serde::de::{EnumAccess, Error, MapAccess, SeqAccess, Visitor};
-use serde::Deserializer;
+use serde::{Deserializer, Serializer};
 use std::fmt::Formatter;
 use std::io::{Cursor, Read, Write};
 
@@ -400,13 +400,28 @@ where
     deserializer.deserialize_any(BitSetVisitor::new(BitSet::new(256, 9)))
 }
 
+fn serialize_heightmap_bitset<S>(item: BitSet, serializer: S) -> Result<BitSet, S::Error>
+where
+    S: Serializer,
+{
+    nbt::i64_array(item.get_raw(), serializer)
+}
+
 #[derive(serde_derive::Serialize, serde_derive::Deserialize, Debug)]
 pub struct HeightMaps {
     #[serde(rename = "WORLD_SURFACE")]
-    #[serde(deserialize_with = "deserialize_heightmap_bitset")]
+    #[serde(
+        deserialize_with = "deserialize_heightmap_bitset",
+        serialize_with = "serialize_heightmap_bitset"
+    )]
+    #[serde(flatten)]
     world_surface: BitSet,
     #[serde(rename = "MOTION_BLOCKING")]
-    #[serde(deserialize_with = "deserialize_heightmap_bitset")]
+    #[serde(
+        deserialize_with = "deserialize_heightmap_bitset",
+        serialize_with = "serialize_heightmap_bitset"
+    )]
+    #[serde(flatten)]
     motion_blocking: BitSet,
 }
 
