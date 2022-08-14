@@ -455,7 +455,9 @@ pub struct BitSetVisitor {
 
 impl BitSetVisitor {
     pub fn new(seed: BitSet) -> Self {
-        Self { seeded_bitset: seed }
+        Self {
+            seeded_bitset: seed,
+        }
     }
 
     fn expected_size(&self) -> i32 {
@@ -565,10 +567,17 @@ impl Display for BitSetValidationError {
 
 impl BitSet {
     pub fn new(size: i32, bits: i32) -> Self {
-        SimpleStorage {
-            size,
-            bits,
-            raw: vec![0; Self::expected_size(size, bits) as usize],
+        if size == 0 || bits == 0 {
+            ZeroStorage {
+                size: 0,
+                raw: vec![],
+            }
+        } else {
+            SimpleStorage {
+                size,
+                bits,
+                raw: vec![0; Self::expected_size(size, bits) as usize],
+            }
         }
     }
 

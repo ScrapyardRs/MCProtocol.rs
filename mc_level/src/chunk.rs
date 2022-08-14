@@ -1,5 +1,5 @@
 use crate::Either;
-use mc_serializer::ext::BitSet::ZeroStorage;
+use mc_serializer::ext::BitSet::{SimpleStorage, ZeroStorage};
 use mc_serializer::ext::{BitSet, BitSetValidationError, BitSetVisitor};
 use mc_serializer::primitive::VarInt;
 use mc_serializer::serde::{Contextual, Deserialize, ProtocolVersion, Serialize};
@@ -532,6 +532,27 @@ impl Chunk {
         }
         let section = &self.chunk_sections[section_index as usize];
         section.states.get(Self::state_index_from(x, y, z))
+    }
+
+    pub fn rewrite_plane(&mut self, y: i32, block_id: VarInt) -> Result<(), BitSetValidationError> {
+        let section_index = self.get_section_index(y);
+        if section_index < 0 || self.chunk_sections.len() <= section_index as usize {
+            return Err(BitSetValidationError(format!("Out of range.")));
+        }
+        let section = &mut self.chunk_sections[section_index as usize];
+        section.states = PaletteContainer {
+            bits_per_entry: 0,
+            palette: Palette::SingleValue {
+                block_type_id: block_id,
+            },
+            storage: BitSet::new(0, 0),
+        };
+        for x in 0..15 {
+            for z in 0..15 {
+                self.height_maps.update_inner(x, y, z, block_id)?;
+            }
+        }
+        Ok(())
     }
 
     pub fn set_block_id(
