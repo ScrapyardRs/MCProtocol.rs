@@ -1,0 +1,24 @@
+#[derive(serde_derive::Serialize)]
+#[serde(untagged)]
+pub enum BitSet {
+    ZeroStorage {
+        #[serde(skip)]
+        size: i32,
+        #[serde(flatten)]
+        #[serde(serialize_with = "nbt::i64_array")]
+        raw: Vec<i64>,
+    },
+    SimpleStorage {
+        #[serde(skip)]
+        size: i32,
+        #[serde(skip)]
+        bits: i32,
+        #[serde(flatten)]
+        #[serde(serialize_with = "nbt::i64_array")]
+        raw: Vec<i64>,
+    },
+}
+
+fn main() {
+
+}

@@ -6,11 +6,16 @@ use crate::serde::{
 use crate::{wrap_indexed_struct_context, wrap_struct_context};
 use bytes::Buf;
 
+use crate::ext::BitSet::SimpleStorage;
+use nbt::ser::Encoder;
+use serde::de::{EnumAccess, MapAccess, SeqAccess, Visitor};
+use serde::ser::SerializeSeq;
+use serde::{Deserializer, Serializer};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::io::{Cursor, ErrorKind, Read, Write};
-use nbt::ser::Encoder;
-use serde::Serializer;
+use BitSet::ZeroStorage;
 
 impl<T: Contextual> Contextual for (VarInt, Vec<T>) {
     fn context() -> String {
@@ -87,7 +92,11 @@ impl<T: Deserialize> Deserialize for Vec<T> {
         let mut remaining = Cursor::new(remaining);
         let mut result = Vec::new();
         while remaining.has_remaining() {
-            result.push(T::deserialize(&mut remaining, protocol_version)?);
+            result.push(wrap_indexed_struct_context!(
+                "result",
+                result.len(),
+                T::deserialize(&mut remaining, protocol_version)
+            )?);
         }
         Ok(result)
     }
@@ -272,16 +281,6 @@ where
     Ok(sizer.current_size())
 }
 
-pub fn size_stripped_nbt<T>(value: &T, protocol_version: ProtocolVersion) -> Result<i32>
-where
-    T: Contextual + serde::ser::Serialize,
-{
-    let mut outer_size = InternalSizer::default();
-    let mut sizer = strip_fake_nbt_header(&mut outer_size);
-    write_nbt(value, &mut sizer, protocol_version)?;
-    Ok(outer_size.current_size())
-}
-
 pub fn read_nbt<T, R: Read>(reader: &mut R, _: ProtocolVersion) -> Result<T>
 where
     T: Contextual + for<'de> serde::de::Deserialize<'de>,
@@ -295,234 +294,6 @@ impl<K: Contextual, V: Contextual> Contextual for HashMap<K, V> {
     }
 }
 
-pub struct FakeNbtHeaderStripper<'a, W: Write> {
-    inner: &'a mut W,
-    cursor: usize,
-    skip_state: (i32, u16),
-    prep_bytes: Option<u8>,
-    buf_to_forward: Vec<u8>,
-}
-
-impl<'a, W: Write> FakeNbtHeaderStripper<'a, W> {
-    fn handle_bytes(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        if buf.len() == self.cursor {
-            return Ok(0);
-        }
-        println!("FAKE NBT HEADER STRIPPER: ({}, {})", buf.len(), self.cursor);
-
-        match self.skip_state {
-            (0, _) => {
-                println!("Skip state 0");
-                self.cursor += buf.len().min(1); // consume
-                println!("Next cursor {}", self.cursor);
-                if self.cursor == 0 {
-                    Ok(0)
-                } else {
-                    println!("Skip state up");
-                    self.skip_state = (1, 0);
-                    self.handle_bytes(buf).map(|r| r + 1)
-                }
-            }
-            (1, _) if matches!(self.prep_bytes, None) => {
-                // read in first byte
-                match buf.len() - self.cursor {
-                    x if x >= 2 => {
-                        println!("Reading both length bytes.");
-                        self.buf_to_forward.push(buf[self.cursor]);
-                        self.buf_to_forward.push(buf[self.cursor + 1]);
-                        println!("Pushing buffer. {:?}", self.buf_to_forward);
-                        self.skip_state = (
-                            2,
-                            u16::from_be_bytes([buf[self.cursor], buf[self.cursor + 1]]),
-                        );
-                        println!("Post: {:?}", self.skip_state);
-                        self.cursor += 2;
-                        self.handle_bytes(buf).map(|r| r + 2)
-                    }
-                    1 => {
-                        println!("Forwarding byte.");
-                        self.buf_to_forward.push(buf[self.cursor]);
-                        self.prep_bytes = Some(buf[self.cursor]);
-                        Ok(1)
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            (1, _) => {
-                println!("Reading forwarded byte!");
-                self.buf_to_forward.push(buf[0]);
-                self.skip_state = (2, u16::from_be_bytes([self.prep_bytes.unwrap(), buf[0]]));
-                self.handle_bytes(buf).map(|r| r + 1)
-            }
-            // here we're reading the string in preparation
-            // after the string we'll read either a 0x00 or a 0x0a
-            // in the case of a 0x00 we must forward a 0x00 immediately
-            // and close, the nbt writer should handle that, we just need to
-            // buffer the string send - it isn't skipped if 0x00
-            // so we must consume it early for "under reads"
-            (2, to_read) => {
-                println!("Reading in string.");
-                let available_read = buf.len().min(to_read as usize) - self.cursor;
-                self.cursor += available_read;
-                self.buf_to_forward
-                    .extend_from_slice(&buf[self.cursor..self.cursor + available_read]);
-                if available_read as u16 == to_read {
-                    self.skip_state = (3, 0);
-                } else {
-                    self.skip_state = (2, to_read - available_read as u16);
-                }
-                println!("Wrote bytes: {}", available_read);
-                self.handle_bytes(buf).map(|r| r + available_read)
-            }
-            (3, _) => {
-                println!("Reading true header.");
-                let heading_value = buf[self.cursor];
-                self.cursor += 1;
-                match heading_value {
-                    0x00 => {
-                        println!("Null...");
-                        if self.inner.write(&[0x00])? == 1 {
-                            self.skip_state = (5, 0);
-                            Ok(1)
-                        } else {
-                            Ok(0)
-                        }
-                    }
-                    x => {
-                        println!("Read Tag: {}", x);
-                        if self.inner.write(&[x])? == 1 {
-                            self.skip_state = (4, 0);
-                            self.handle_bytes(buf).map(|r| r + 1)
-                        } else {
-                            Ok(0)
-                        }
-                    }
-                    _ => Err(std::io::Error::new(
-                        ErrorKind::InvalidInput,
-                        "Invalid value coming from internal mapper.",
-                    )),
-                }
-            }
-            (4, _) => {
-                println!("Writing string buffer. {}", self.cursor);
-                self.inner.write_all(&self.buf_to_forward)?;
-                self.inner.write_all(&buf[self.cursor..])?;
-                println!("Wrote size: {}", buf[self.cursor..].len());
-                Ok(buf[self.cursor..].len())
-            }
-            (5, 0) => self.inner.write(buf),
-            _ => Ok(0),
-        }
-    }
-}
-
-impl<'a, W: Write> Write for FakeNbtHeaderStripper<'a, W> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.cursor = 0;
-        let x = self.handle_bytes(buf)?;
-        println!("Writing {} out of {}", x, buf.len());
-        Ok(x)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.inner.flush()
-    }
-}
-
-pub struct FakeNbtHeaderInserter<'a, R: Read> {
-    skip_state: (usize, usize),
-    inner: &'a mut R,
-}
-
-impl<'a, R: Read> FakeNbtHeaderInserter<'a, R> {
-    pub fn into_inner(self) -> &'a mut R {
-        self.inner
-    }
-}
-
-impl<'a, R: Read> Read for FakeNbtHeaderInserter<'a, R> {
-    fn read(&mut self, mut buf: &mut [u8]) -> std::io::Result<usize> {
-        match self.skip_state {
-            (0, _) => {
-                // write initial compound tag byte
-                let written = buf.write(&[0x0a])?;
-                if written == 1 {
-                    self.skip_state = (1, 0);
-                } else {
-                    return Ok(0);
-                }
-                let mut inner_read: [u8; 1] = [0];
-                let inner_read_size = self.inner.read(&mut inner_read)?;
-                if inner_read_size == 0 {
-                    return Ok(0);
-                }
-                let intended_state = inner_read[0];
-                if intended_state == 0x0A {
-                    self.skip_state = (4, 0);
-                } else if intended_state != 0x00 {
-                    return Err(std::io::Error::new(
-                        ErrorKind::InvalidInput,
-                        format!("Invalid tag type: {}", intended_state),
-                    ));
-                }
-                Ok(written)
-            }
-            (1, mut cursor) => {
-                // write root tag string length
-                const WRITE_BYTES: [u8; 2] = [0, 9];
-                const TO_WRITE: usize = WRITE_BYTES.len();
-                let written = buf.write(&WRITE_BYTES[cursor..])?;
-                cursor += written;
-                if cursor == TO_WRITE {
-                    self.skip_state = (2, 0);
-                }
-                Ok(written)
-            }
-            (2, mut cursor) => {
-                // write root tag string
-                const WRITE_BYTES: [u8; 9] = [102, 97, 107, 101, 95, 114, 111, 111, 116];
-                const TO_WRITE: usize = WRITE_BYTES.len();
-                let written = buf.write(&WRITE_BYTES[cursor..])?;
-                cursor += written;
-                if cursor == TO_WRITE {
-                    self.skip_state = (3, 0);
-                }
-                Ok(written)
-            }
-            (3, _) => {
-                if buf.write(&[0x00])? == 0 {
-                    Ok(0)
-                } else {
-                    self.skip_state = (4, 0);
-                    Ok(1)
-                }
-            }
-            (4, _) => {
-                // free spin
-                self.inner.read(buf)
-            }
-            (_, _) => panic!("Invalid skip state"),
-        }
-    }
-}
-
-pub fn strip_fake_nbt_header<W: Write>(writer: &mut W) -> FakeNbtHeaderStripper<W> {
-    FakeNbtHeaderStripper {
-        inner: writer,
-        cursor: 0,
-        skip_state: (0, 0),
-        prep_bytes: None,
-        buf_to_forward: vec![],
-    }
-}
-
-pub fn insert_fake_nbt_header<R: Read>(reader: &mut R) -> FakeNbtHeaderInserter<R> {
-    FakeNbtHeaderInserter {
-        skip_state: (0, 0),
-        inner: reader,
-    }
-}
-
 macro_rules! map_size {
     ($v:expr, $t:ty) => {
         wrap_struct_context!(
@@ -531,7 +302,7 @@ macro_rules! map_size {
                 err,
                 SerializerContext::new(
                     <$t>::context(),
-                    format!("Failed to create varint from usize {}", $v.len())
+                    format!("Failed to create var int from usize {}", $v.len())
                 )
             ))
         )?
@@ -652,3 +423,414 @@ impl Serialize for String {
 }
 
 context!(nbt::Value);
+
+const fn false0() -> bool {
+    false
+}
+
+#[derive(serde_derive::Serialize, Debug)]
+#[serde(untagged)]
+pub enum BitSet {
+    ZeroStorage {
+        #[serde(skip)]
+        size: i32,
+        #[serde(flatten)]
+        #[serde(serialize_with = "nbt::i64_array")]
+        raw: Vec<i64>,
+    },
+    SimpleStorage {
+        #[serde(skip)]
+        size: i32,
+        #[serde(skip)]
+        bits: i32,
+        #[serde(flatten)]
+        #[serde(serialize_with = "nbt::i64_array")]
+        raw: Vec<i64>,
+    },
+}
+
+pub struct BitSetVisitor {
+    seeded_bitset: BitSet,
+}
+
+impl BitSetVisitor {
+    pub fn new(seed: BitSet) -> Self {
+        Self { seeded_bitset: seed }
+    }
+
+    fn expected_size(&self) -> i32 {
+        match &self.seeded_bitset {
+            ZeroStorage { .. } => 0,
+            SimpleStorage { size, bits, .. } => BitSet::expected_size(*size, *bits),
+        }
+    }
+}
+
+impl<'de> Visitor<'de> for BitSetVisitor {
+    type Value = BitSet;
+
+    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        write!(
+            formatter,
+            "A long array of {} length.",
+            &self.expected_size()
+        )
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut raw = Vec::with_capacity(self.expected_size() as usize);
+        let expecting = self.expected_size();
+        loop {
+            match seq.next_element_seed(BitSetSeedDeserializer)? {
+                None => {
+                    return if raw.len() == expecting as usize {
+                        Ok(match self.seeded_bitset {
+                            ZeroStorage { size, raw } => ZeroStorage { size, raw },
+                            SimpleStorage { size, bits, .. } => SimpleStorage { size, bits, raw },
+                        })
+                    } else {
+                        Err(serde::de::Error::custom(format!(
+                            "Invalid length {} expected {}.",
+                            raw.len(),
+                            self.expected_size(),
+                        )))
+                    }
+                }
+                Some(next) => {
+                    if raw.len() == expecting as usize {
+                        return Err(serde::de::Error::custom(format!(
+                            "Array too big, expected size {}.",
+                            self.expected_size(),
+                        )));
+                    } else {
+                        raw.push(next);
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct BitSetSeedVisitor;
+
+impl<'de> Visitor<'de> for BitSetSeedVisitor {
+    type Value = i64;
+
+    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        write!(formatter, "A long.")
+    }
+
+    fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(v)
+    }
+
+    fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(v as i64)
+    }
+}
+
+struct BitSetSeedDeserializer;
+
+impl<'de> serde::de::DeserializeSeed<'de> for BitSetSeedDeserializer {
+    type Value = i64;
+
+    fn deserialize<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_i64(BitSetSeedVisitor)
+    }
+}
+
+#[derive(Debug)]
+pub struct BitSetValidationError(pub String);
+
+impl std::error::Error for BitSetValidationError {}
+
+impl Display for BitSetValidationError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Error validating BitSet entry. {}", self.0)
+    }
+}
+
+impl BitSet {
+    pub fn new(size: i32, bits: i32) -> Self {
+        SimpleStorage {
+            size,
+            bits,
+            raw: vec![0; Self::expected_size(size, bits) as usize],
+        }
+    }
+
+    pub fn with_seeded_raw(
+        size: i32,
+        bits: i32,
+        raw: Vec<i64>,
+    ) -> std::result::Result<Self, BitSetValidationError> {
+        if Self::expected_size(size, bits) as usize != raw.len() {
+            return Err(BitSetValidationError(format!(
+                "Invalid bitset seeded raw length of {}, expected {}.",
+                raw.len(),
+                Self::expected_size(size, bits)
+            )));
+        }
+        Ok(SimpleStorage { size, bits, raw })
+    }
+
+    #[rustfmt::skip]
+    const MAGIC: [i32; 192] = [-1, -1, 0, -2147483648, 0, 0, 1431655765, 1431655765,
+        0, -2147483648, 0, 1, 858993459, 858993459, 0,
+        715827882, 715827882, 0, 613566756, 613566756, 0,
+        -2147483648, 0, 2, 477218588, 477218588, 0, 429496729,
+        429496729, 0, 390451572, 390451572, 0, 357913941,
+        357913941, 0, 330382099, 330382099, 0, 306783378,
+        306783378, 0, 286331153, 286331153, 0, -2147483648,
+        0, 3, 252645135, 252645135, 0, 238609294,
+        238609294, 0, 226050910, 226050910, 0, 214748364, 214748364,
+        0, 204522252, 204522252, 0, 195225786, 195225786,
+        0, 186737708, 186737708, 0, 178956970, 178956970,
+        0, 171798691, 171798691, 0, 165191049, 165191049, 0, 159072862,
+        159072862, 0, 153391689, 153391689,
+        0, 148102320, 148102320, 0, 143165576, 143165576, 0, 138547332,
+        138547332, 0, -2147483648, 0, 4, 130150524, 130150524,
+        0, 126322567, 126322567, 0, 122713351, 122713351, 0,
+        119304647, 119304647, 0, 116080197, 116080197, 0, 113025455,
+        113025455, 0, 10127366, 110127366, 0, 107374182,
+        107374182, 0, 104755299, 104755299,
+        0, 102261126, 102261126, 0, 99882960, 99882960, 0,
+        97612893, 97612893, 0, 95443717, 95443717, 0, 93368854, 93368854,
+        0, 91382282, 91382282, 0, 89478485, 89478485, 0, 87652393, 87652393,
+        0, 85899345, 85899345, 0, 84215045, 84215045, 0, 82595524, 82595524,
+        0, 81037118, 81037118, 0, 79536431, 79536431, 0, 78090314, 78090314,
+        0, 76695844, 76695844, 0, 75350303, 75350303, 0, 74051160,
+        74051160, 0, 72796055, 72796055, 0, 71582788, 71582788, 0,
+        70409299, 70409299, 0, 69273666, 69273666, 0, 68174084,
+        68174084, 0, -2147483648, 0, 5,
+    ];
+
+    const fn mask(bits: i32) -> i64 {
+        match bits {
+            0 => 0,
+            _ => (1 << bits as i64) - 1,
+        }
+    }
+
+    const fn values_per_long(bits: i32) -> i32 {
+        match bits {
+            0 => 0,
+            _ => 64 / bits,
+        }
+    }
+
+    const fn divide_mul(bits: i32) -> i32 {
+        match bits {
+            0 => 0,
+            _ => Self::MAGIC[(3 * (Self::values_per_long(bits) - 1)) as usize],
+        }
+    }
+
+    const fn divide_add(bits: i32) -> i32 {
+        match bits {
+            0 => 0,
+            _ => Self::MAGIC[1 + (3 * (Self::values_per_long(bits) - 1)) as usize],
+        }
+    }
+
+    const fn divide_shift(bits: i32) -> i32 {
+        match bits {
+            0 => 0,
+            _ => Self::MAGIC[2 + (3 * (Self::values_per_long(bits) - 1)) as usize],
+        }
+    }
+
+    const fn cell_index(bits: i32, n: i32) -> i32 {
+        let l = 4294967295 & Self::divide_mul(bits) as u64;
+        let l2 = 4294967295 & Self::divide_add(bits) as u64;
+        let n = n as u64;
+        ((((n * l) + l2) >> 32) >> Self::divide_shift(bits) as u64) as i32
+    }
+
+    fn validate_n32(n1: i32, n2: i32, n3: i32) -> std::result::Result<(), BitSetValidationError> {
+        if !(n1..n2).contains(&n3) {
+            return Err(BitSetValidationError(format!(
+                "i32 base {} is not between {} and {}.",
+                n3, n1, n2
+            )));
+        }
+        Ok(())
+    }
+
+    fn validate_n64(n1: i64, n2: i64, n3: i64) -> std::result::Result<(), BitSetValidationError> {
+        if !(n1..n2).contains(&n3) {
+            return Err(BitSetValidationError(format!(
+                "i64 base {} is not between {} and {}.",
+                n3, n1, n2
+            )));
+        }
+        Ok(())
+    }
+
+    pub const fn expected_size(size: i32, bits: i32) -> i32 {
+        (size + Self::values_per_long(bits) - 1) / Self::values_per_long(bits)
+    }
+
+    pub fn get_and_set(
+        &mut self,
+        n: i32,
+        n2: i32,
+    ) -> std::result::Result<i32, BitSetValidationError> {
+        match self {
+            ZeroStorage { size, .. } => {
+                Self::validate_n32(0, *size - 1, n)?;
+                Self::validate_n64(0, 0, n2 as i64)?;
+                Ok(0)
+            }
+            SimpleStorage { size, bits, raw } => {
+                Self::validate_n32(0, *size - 1, n)?;
+                Self::validate_n64(0, Self::mask(*bits), n2 as i64)?;
+                let n3 = Self::cell_index(*bits, n);
+                let larr = raw[n3 as usize] as u64;
+                let u64mask = Self::mask(*bits) as u64;
+                let n4 = (n - (n3 * Self::values_per_long(*bits))) * *bits;
+                let n5 = (u64mask & (larr >> n4 as u64)) as i32;
+                raw[n3 as usize] = (larr as u64 & ((u64mask << n4 as u64) ^ 0xFFFFFFFFFFFFFFFFu64)
+                    | (n2 as u64 & Self::mask(*bits) as u64) << n4 as u64)
+                    as i64;
+                Ok(n5)
+            }
+        }
+    }
+
+    pub fn set(&mut self, n: i32, n2: i32) -> std::result::Result<(), BitSetValidationError> {
+        match self {
+            ZeroStorage { size, .. } => {
+                Self::validate_n32(0, *size - 1, n)?;
+                Self::validate_n64(0, 0, n2 as i64)?;
+                Ok(())
+            }
+            SimpleStorage { size, bits, raw } => {
+                Self::validate_n32(0, *size - 1, n)?;
+                Self::validate_n64(0, Self::mask(*bits), n2 as i64)?;
+                let n3 = Self::cell_index(*bits, n);
+                let larr = raw[n3 as usize];
+                let n4 = (n - (n3 * Self::values_per_long(*bits))) * *bits;
+                let u64mask = Self::mask(*bits) as u64;
+                raw[n3 as usize] = (larr as u64 & ((u64mask << n4 as u64) ^ 0xFFFFFFFFFFFFFFFFu64)
+                    | (n2 as u64 & Self::mask(*bits) as u64) << n4 as u64)
+                    as i64;
+                Ok(())
+            }
+        }
+    }
+
+    pub fn get(&self, n: i32) -> std::result::Result<i32, BitSetValidationError> {
+        match self {
+            ZeroStorage { size, .. } => {
+                Self::validate_n32(0, *size - 1, n)?;
+                Ok(0)
+            }
+            SimpleStorage { size, bits, raw } => {
+                Self::validate_n32(0, *size - 1, n)?;
+                let n3 = Self::cell_index(*bits, n);
+                let larr = raw[n3 as usize] as u64;
+                let n4 = (n - (n3 * Self::values_per_long(*bits))) * *bits;
+                let u64mask = Self::mask(*bits) as u64;
+                let n5 = (u64mask & (larr >> n4 as u64)) as i32;
+                Ok(n5)
+            }
+        }
+    }
+
+    pub fn from_reader<R: Read>(
+        reader: &mut R,
+        bits: u8,
+        storage_size: i32,
+        protocol_version: ProtocolVersion,
+    ) -> Result<Self> {
+        if bits == 0 {
+            let deserialized_size = VarInt::deserialize(reader, protocol_version)?;
+            if *deserialized_size != 0 {
+                return Err(Error::Generic(SerializerContext::new(
+                    Self::context(),
+                    format!(
+                        "Incorrect value length given {} expected {}.",
+                        0, deserialized_size
+                    ),
+                )));
+            }
+            Ok(ZeroStorage {
+                size: storage_size,
+                raw: vec![],
+            })
+        } else {
+            let expected_size = Self::expected_size(storage_size, bits as i32);
+            let deserialized_size = VarInt::deserialize(reader, protocol_version)?;
+            if expected_size != *deserialized_size {
+                return Err(Error::Generic(SerializerContext::new(
+                    Self::context(),
+                    format!(
+                        "Incorrect value length given {} expected {}.",
+                        expected_size, deserialized_size
+                    ),
+                )));
+            }
+
+            let mut raw = Vec::with_capacity(expected_size as usize);
+            for index in 0..expected_size {
+                raw.push(wrap_indexed_struct_context!(
+                    "raw",
+                    index,
+                    Deserialize::deserialize(reader, protocol_version)
+                )?);
+            }
+
+            Ok(SimpleStorage {
+                size: storage_size,
+                bits: bits as i32,
+                raw,
+            })
+        }
+    }
+
+    pub fn to_writer<W: Write>(
+        &self,
+        writer: &mut W,
+        protocol_version: ProtocolVersion,
+    ) -> Result<()> {
+        match self {
+            ZeroStorage { .. } => {
+                wrap_struct_context!("size", VarInt::from(0).serialize(writer, protocol_version))?
+            }
+            SimpleStorage { raw, .. } => {
+                wrap_struct_context!(
+                    "raw",
+                    (VarInt::from(raw.len() as i32), raw.clone())
+                        .serialize(writer, protocol_version)
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn check_size(&self, protocol_version: ProtocolVersion) -> Result<i32> {
+        Ok(match self {
+            ZeroStorage { .. } => 1, // VarInt(0) is size of 1 byte
+            SimpleStorage { size, raw, bits } => {
+                VarInt::from(Self::expected_size(*size, *bits)).size(protocol_version)?
+                    + (raw.len() as i32 * 8)
+            }
+        })
+    }
+}
+
+context!(BitSet);

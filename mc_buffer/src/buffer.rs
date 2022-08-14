@@ -103,9 +103,7 @@ pub trait PacketWriterGeneric: PacketWriter {
 impl<T: PacketReaderGeneric> PacketReader for T {
     fn poll(&mut self) -> PacketFuture<BufferState> {
         Box::pin(async move {
-            println!("Poll start.");
             if self.is_packet_available() {
-                println!("Packet available.");
                 return Ok(BufferState::PacketReady);
             }
 
@@ -114,11 +112,7 @@ impl<T: PacketReaderGeneric> PacketReader for T {
                 Err(_) => return Ok(BufferState::Error(String::from("Client read timeout."))),
             };
 
-            println!("Read bytes: {:?}", size_read);
-
             let size_read = size_read.min(self.decoded().capacity() - self.decoded().len());
-
-            println!("Read bytes post size read: {:?}", size_read);
 
             if size_read == 0 {
                 return Ok(if self.is_packet_available() {
@@ -207,17 +201,12 @@ impl<T: PacketWriterGeneric> PacketWriter for T {
             let buffer = Packet::create_packet_buffer(self.protocol_version(), packet)?;
 
             let mut buffer = if let Some(compressor) = self.compression() {
-                println!("Compressed");
                 compressor.compress(buffer)?
             } else {
-                println!("Decompressed.");
                 Compressor::uncompressed(buffer)?
             };
 
-            println!("Encrypting bytes.");
             self.encrypt(&mut buffer);
-
-            println!("Writing buffer {:?} to client.", buffer);
 
             self.writer().write_all(&buffer).await?;
             Ok(())

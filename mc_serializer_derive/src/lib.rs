@@ -64,7 +64,19 @@ pub fn derive_contextual(item: proc_macro::TokenStream) -> proc_macro::TokenStre
     })
 }
 
-#[proc_macro_derive(MCDeserialize)]
+#[proc_macro_derive(
+    MCDeserialize,
+    attributes(
+        key,
+        serial_if,
+        serialize_if,
+        deserialize_if,
+        nbt,
+        json,
+        default,
+        after
+    )
+)]
 pub fn derive_deserialize(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let derive_input = syn::parse_macro_input!(item as DeriveInput);
 
@@ -79,7 +91,19 @@ pub fn derive_deserialize(item: proc_macro::TokenStream) -> proc_macro::TokenStr
     }
 }
 
-#[proc_macro_derive(MCSerialize)]
+#[proc_macro_derive(
+    MCSerialize,
+    attributes(
+        key,
+        serial_if,
+        serialize_if,
+        deserialize_if,
+        nbt,
+        json,
+        default,
+        after
+    )
+)]
 pub fn derive_serialize(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let derive_input = syn::parse_macro_input!(item as DeriveInput);
 

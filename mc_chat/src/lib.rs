@@ -212,6 +212,7 @@ pub enum Chat {
         base: BaseChat,
     },
     Translatable {
+        #[serde(rename = "translate")]
         translatable: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         with: Option<Vec<Box<Self>>>,

@@ -93,23 +93,17 @@ impl BufferRegistryEngine {
         });
 
         loop {
-            println!("Registry run cycle 1.");
             let reg_clone = Arc::clone(&registry);
             let context_clone = Arc::clone(&context);
             let next_packet = Cursor::new(self.packet_reader.loop_read().await?);
             let data = StateRegistry::emit(reg_clone, context_clone, next_packet).await?;
 
-            println!("Registry run cycle 2.");
-
             let mut write_lock = self.context_data.write().await;
-            println!("Another deadlock I'm afraid of right here.");
 
             if (predicate)(data, &mut write_lock) {
-                println!("Predicate match.");
                 break;
             }
 
-            println!("Pass.");
         }
         Ok(())
     }

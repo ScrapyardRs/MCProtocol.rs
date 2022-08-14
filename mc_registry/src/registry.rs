@@ -61,23 +61,15 @@ impl<'a, Context> StateRegistry<'a, Context> {
         let protocol_version = self_read_lock.protocol_version;
         let packet_id = VarInt::deserialize(&mut packet_buffer, protocol_version)?;
         let handler = self_read_lock.mappings.get(&packet_id);
-        println!("Open handler self");
         if let Some(handler) = handler {
-            println!("Emitter found.");
             let handler = Arc::clone(handler);
-            println!("Handler made.");
             drop(self_read_lock);
-            println!("Drop self lock.");
             (handler)(context, arc_self, protocol_version, packet_buffer).await?;
-            println!("Post handler complete");
             Ok(None)
         } else {
-            println!("Invalid packet.");
             if self_read_lock.fail_on_invalid {
-                println!("Invalid packet failure.");
                 anyhow::bail!("Failure to understand packet id {}", packet_id)
             }
-            println!("Ok");
             Ok(Some(UnhandledContext {
                 packet_id,
                 bytes: packet_buffer.into_inner(),

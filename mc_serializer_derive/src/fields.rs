@@ -6,7 +6,7 @@ use syn::{Attribute, Field, Fields, Type};
 
 pub enum SerialType {
     Default,
-    Nbt(bool),
+    Nbt,
     Json(TokenStream),
 }
 
@@ -29,16 +29,7 @@ impl SerialConfig {
         let segment = attribute.path.segments.last().unwrap();
 
         match segment.ident.to_string().as_str() {
-            "nbt" => {
-                self.serial_type = SerialType::Nbt(
-                    attribute
-                        .parse_args::<TokenStream>()
-                        .ok()
-                        .map(|s| s.to_string())
-                        .map(|inner| inner == "inject_header")
-                        .unwrap_or(false),
-                )
-            }
+            "nbt" => self.serial_type = SerialType::Nbt,
             "json" => {
                 self.serial_type = SerialType::Json(
                     attribute
@@ -172,15 +163,8 @@ impl SerialContext {
             SerialType::Default => {
                 quote::quote!(mc_serializer::serde::Serialize::serialize(#field_ident, writer, protocol_version))
             }
-            SerialType::Nbt(strip_header) => {
-                if *strip_header {
-                    quote::quote! {
-                        let mut write_out = mc_serializer::ext::strip_fake_nbt_header(writer);
-                        mc_serializer::ext::write_nbt(#field_ident, &mut write_out, protocol_version)
-                    }
-                } else {
-                    quote::quote!(mc_serializer::ext::write_nbt(#field_ident, writer, protocol_version))
-                }
+            SerialType::Nbt => {
+                quote::quote!(mc_serializer::ext::write_nbt(#field_ident, writer, protocol_version))
             }
             SerialType::Json(max_length_tokens) => {
                 quote::quote!(mc_serializer::ext::write_json(#max_length_tokens, #field_ident, writer, protocol_version))
@@ -205,12 +189,8 @@ impl SerialContext {
             SerialType::Default => {
                 quote::quote!(size += mc_serializer::serde::Serialize::size(#field_ident, protocol_version))
             }
-            SerialType::Nbt(strip_header) => {
-                if *strip_header {
-                    quote::quote!(size += mc_serializer::ext::size_stripped_nbt(#field_ident, protocol_version))
-                } else {
-                    quote::quote!(size += mc_serializer::ext::size_nbt(#field_ident, protocol_version))
-                }
+            SerialType::Nbt => {
+                quote::quote!(size += mc_serializer::ext::size_nbt(#field_ident, protocol_version))
             }
             SerialType::Json(_) => {
                 quote::quote!(size += mc_serializer::ext::size_json(#field_ident, protocol_version))
@@ -230,18 +210,8 @@ impl SerialContext {
                 reader,
                 protocol_version
             )),
-            SerialType::Nbt(inject_header) => {
-                if *inject_header {
-                    quote::quote! {
-                        let mut read_out = mc_serializer::ext::insert_fake_nbt_header(reader);
-                        mc_serializer::ext::read_nbt(
-                            &mut read_out,
-                            protocol_version
-                        )
-                    }
-                } else {
-                    quote::quote!(mc_serializer::ext::read_nbt(reader, protocol_version))
-                }
+            SerialType::Nbt => {
+                quote::quote!(mc_serializer::ext::read_nbt(reader, protocol_version))
             }
             SerialType::Json(max_length_tokens) => {
                 quote::quote!(mc_serializer::ext::read_json(#max_length_tokens, reader, protocol_version))

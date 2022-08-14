@@ -71,15 +71,13 @@ pub struct BlockEntityInfo {
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct LevelChunkData {
-    pub heightmaps: nbt::Blob,
-    pub buffer: (VarInt, Vec<u8>),
+    pub chunk: mc_level::chunk::Chunk,
     pub block_entities: (VarInt, Vec<BlockEntityInfo>),
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct LevelChunkWithLight {
-    pub x: VarInt,
-    pub z: VarInt,
+    pub chunk_data: LevelChunkData,
     pub data: LightUpdateData,
 }
 
@@ -209,7 +207,7 @@ pub struct EntityEvent {
 
 #[derive(mc_serializer_derive::Serial, Debug)]
 pub struct UpdateTags {
-    pub tags: HashMap<ResourceLocation, (VarInt, Vec<VarInt>)>,
+    pub tags: HashMap<ResourceLocation, HashMap<ResourceLocation, (VarInt, Vec<VarInt>)>>,
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
@@ -272,6 +270,13 @@ pub struct JoinGame {
 }
 
 #[derive(mc_serializer_derive::Serial, Debug)]
+pub struct SystemChat {
+    #[json(32767)]
+    pub content: Chat,
+    pub overlay: bool,
+}
+
+#[derive(mc_serializer_derive::Serial, Debug)]
 pub struct Disconnect {
     #[json(32767)]
     pub reason: Chat,
@@ -301,6 +306,7 @@ crate::create_mappings! {
     SetCarriedItem { def 0x4A; }
     SetChunkCacheCenter { def 0x4B; }
     SetDefaultSpawnPosition { def 0x4D; }
+    SystemChat { def 0x62; }
     UpdateRecipes { def 0x6A; }
     UpdateTags { def 0x6B; }
 }

@@ -643,7 +643,6 @@ pub fn write_string<W: Write>(
 ) -> Result<()> {
     let bytes = string.as_bytes();
     let length = VarInt::from(bytes.len() as i32);
-    println!("Encoding {} with length {} and max length {}.", string, length, max_length);
     if length > max_length * 3 {
         return Err(Generic(SerializerContext::new(
             String::context(),
