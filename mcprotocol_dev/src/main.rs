@@ -132,6 +132,7 @@ fn handle_world_border(packet: WorldBorder, _context: LockedContext<Test>) {
 #[mc_registry_derive::packet_handler]
 fn handle_light_update_with_chunk(packet: LevelChunkWithLight, _context: LockedContext<Test>) {
     println!("Level chunk with light omitted for clarity!");
+    println!("Level chunk with light: {:?}", packet.data);
 }
 
 #[mc_registry_derive::packet_handler]
