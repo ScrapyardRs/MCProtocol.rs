@@ -505,6 +505,10 @@ impl Chunk {
         i >> 4
     }
 
+    pub const fn position_coord_from(i: i32) -> i32 {
+        i << 4
+    }
+
     const fn get_min_section(&self) -> i32 {
         Self::section_coord_from(self.min_height)
     }
