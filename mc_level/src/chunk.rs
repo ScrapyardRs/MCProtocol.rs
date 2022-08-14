@@ -400,7 +400,7 @@ where
     deserializer.deserialize_any(BitSetVisitor::new(BitSet::new(256, 9)))
 }
 
-fn serialize_heightmap_bitset<S>(item: BitSet, serializer: S) -> Result<BitSet, S::Error>
+fn serialize_heightmap_bitset<S>(item: &BitSet, serializer: S) -> Result<BitSet, S::Error>
 where
     S: Serializer,
 {
