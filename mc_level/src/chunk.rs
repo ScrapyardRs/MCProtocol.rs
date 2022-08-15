@@ -191,6 +191,10 @@ impl PaletteContainer {
         write: &mut W,
         protocol_version: ProtocolVersion,
     ) -> mc_serializer::serde::Result<()> {
+        wrap_struct_context!(
+            "bits_per_entry",
+            self.bits_per_entry.serialize(write, protocol_version)
+        )?;
         match &self.palette {
             Palette::SingleValue { block_type_id } => {
                 wrap_struct_context!(
