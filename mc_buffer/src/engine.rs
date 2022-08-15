@@ -23,13 +23,13 @@ use crate::encryption::{Codec, Compressor};
 
 pub type Context<'a> = BufferRegistryEngineContext<'a>;
 
-pub trait InnerMapAccessor: Send + Sync {
+pub trait InnerMapAccessor<'a>: Send + Sync {
     fn data(&self) -> &ArcLocked<ShareMap>;
 
-    fn insert_data<K: Key>(self_ref: Arc<RwLock<Self>>, value: K::Value) -> RawFuture<'static, ()>
+    fn insert_data<K: Key>(self_ref: Arc<RwLock<Self>>, value: K::Value) -> RawFuture<'a, ()>
     where
         K::Value: Send + Sync,
-        Self: 'static,
+        Self: 'a,
     {
         Box::pin(async move {
             let read = self_ref.read().await;
@@ -38,10 +38,10 @@ pub trait InnerMapAccessor: Send + Sync {
         })
     }
 
-    fn clone_data<K: Key>(self_ref: Arc<RwLock<Self>>) -> RawFuture<'static, Option<K::Value>>
+    fn clone_data<K: Key>(self_ref: Arc<RwLock<Self>>) -> RawFuture<'a, Option<K::Value>>
     where
         K::Value: Send + Sync + Clone,
-        Self: 'static,
+        Self: 'a,
     {
         Box::pin(async move {
             let read = self_ref.read().await;
@@ -50,9 +50,9 @@ pub trait InnerMapAccessor: Send + Sync {
         })
     }
 
-    fn map_inner(self_ref: Arc<RwLock<Self>>) -> RawFuture<'static, ArcLocked<ShareMap>>
+    fn map_inner(self_ref: Arc<RwLock<Self>>) -> RawFuture<'a, ArcLocked<ShareMap>>
     where
-        Self: 'static,
+        Self: 'a,
     {
         Box::pin(async move {
             let read = self_ref.read().await;
@@ -66,7 +66,7 @@ pub struct BufferRegistryEngineContext<'a> {
     context_data: ArcLocked<ShareMap>,
 }
 
-impl<'a> InnerMapAccessor for BufferRegistryEngineContext<'a> {
+impl<'a> InnerMapAccessor<'a> for BufferRegistryEngineContext<'a> {
     fn data(&self) -> &ArcLocked<ShareMap> {
         &self.context_data
     }
@@ -304,7 +304,7 @@ pub struct ConnectedPlayerContext {
     data: ArcLocked<ShareMap>,
 }
 
-impl InnerMapAccessor for ConnectedPlayerContext {
+impl InnerMapAccessor<'static> for ConnectedPlayerContext {
     fn data(&self) -> &ArcLocked<ShareMap> {
         &self.data
     }
