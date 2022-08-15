@@ -143,7 +143,6 @@ impl<T: PacketReaderGeneric> PacketReader for T {
             }
 
             decoded.put_slice(read_half);
-            log::info!("IN: {}", size_read);
 
             bytes.advance(size_read);
             bytes.reserve(BUFFER_CAPACITY - bytes.len());
@@ -180,8 +179,6 @@ impl<T: PacketReaderGeneric> PacketReader for T {
                             None => cursor,
                             Some(compressor) => compressor.decompress(cursor)?,
                         };
-
-                        log::info!("OUT: {} <len: {:?}>", length + length_size, self.len());
 
                         return Ok(cursor);
                     }
