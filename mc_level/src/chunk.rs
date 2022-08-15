@@ -627,10 +627,6 @@ impl Serialize for Chunk {
             VarInt::from(data_size).serialize(writer, protocol_version)
         )?;
         let mut buffer = Vec::new();
-        wrap_struct_context!(
-            "chunk_data",
-            self.chunk_sections.serialize(&mut buffer, protocol_version)
-        )?;
         for chunk_section in &self.chunk_sections {
             let initial = buffer.len();
             wrap_struct_context!(
