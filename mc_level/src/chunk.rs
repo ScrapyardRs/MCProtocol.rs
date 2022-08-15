@@ -622,10 +622,17 @@ impl Serialize for Chunk {
             "chunk_data_size",
             VarInt::from(data_size).serialize(writer, protocol_version)
         )?;
+        let mut buffer = Vec::new();
         wrap_struct_context!(
             "chunk_data",
-            self.chunk_sections.serialize(writer, protocol_version)
-        )
+            self.chunk_sections.serialize(&mut buffer, protocol_version)
+        )?;
+        println!(
+            "Expected buffer size: {}; Buffer size: {}",
+            data_size,
+            buffer.len()
+        );
+        wrap_struct_context!("chunk_data", buffer.serialize(writer, protocol_version))
     }
 
     fn size(&self, protocol_version: ProtocolVersion) -> mc_serializer::serde::Result<i32> {
