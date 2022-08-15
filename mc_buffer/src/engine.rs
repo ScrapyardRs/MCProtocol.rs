@@ -209,7 +209,6 @@ impl BufferRegistryEngine {
     pub async fn split_out<F, F2>(
         self,
         registry: StateRegistry<'static, ConnectedPlayerContext>,
-        unexpected_close_disconnect: Disconnect,
         context_initializer: F,
         termination_hook: F2,
     ) -> anyhow::Result<PacketSender>
