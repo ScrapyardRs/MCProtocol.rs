@@ -639,7 +639,7 @@ impl Serialize for Chunk {
                 "Expected size of chunk section: {}, actual size: {}",
                 expected, actual
             );
-            if expected != actual {
+            if expected as usize != actual {
                 println!("Chunk section dump: {:?}", chunk_section);
             }
         }
