@@ -17,6 +17,7 @@ use tokio::sync::RwLock;
 const BUFFER_CAPACITY: usize = 2097154; // static value from wiki.vg
 
 pub type PacketFuture<'a, T> = futures::future::BoxFuture<'a, anyhow::Result<T>>;
+pub type RawFuture<'a, T> = futures::future::BoxFuture<'a, T>;
 
 pub enum BufferState {
     Waiting,

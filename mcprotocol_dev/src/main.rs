@@ -113,7 +113,7 @@ fn handle_login_success(
 
 #[mc_registry_derive::packet_handler]
 fn handle_player_position(packet: PlayerPosition, _context: LockedContext<Test>) {
-    println!("Player Position");
+    println!("Player Position: {:?}", packet);
 }
 
 #[mc_registry_derive::packet_handler]
@@ -324,6 +324,21 @@ async fn main() -> anyhow::Result<()> {
                     continue;
                 }
                 if unhandled.packet_id == VarInt::from(42) { // Move entity rot
+                    continue;
+                }
+                if unhandled.packet_id == VarInt::from(82) { // Set entity motion
+                    continue;
+                }
+                if unhandled.packet_id == VarInt::from(1) { // Add experience orb
+                    continue;
+                }
+                if unhandled.packet_id == VarInt::from(102) { // Client teleport entity
+                    continue;
+                }
+                if unhandled.packet_id == VarInt::from(9) { // Block update
+                    continue;
+                }
+                if unhandled.packet_id == VarInt::from(59) { // Remove entities
                     continue;
                 }
                 return Ok(());

@@ -3,6 +3,7 @@ use futures::future::BoxFuture;
 use mc_serializer::primitive::VarInt;
 use mc_serializer::serde::{Deserialize, ProtocolVersion};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::io::Cursor;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -36,6 +37,17 @@ pub struct StateRegistry<'a, Context> {
 pub struct UnhandledContext {
     pub packet_id: VarInt,
     pub bytes: Vec<u8>,
+}
+
+impl Display for UnhandledContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "UnhandledContext{{packet_id=\"{}\", bytes_len=\"{}\"}}",
+            self.packet_id,
+            self.bytes.len()
+        )
+    }
 }
 
 impl<'a, Context> StateRegistry<'a, Context> {

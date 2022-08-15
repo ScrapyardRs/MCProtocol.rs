@@ -1,8 +1,13 @@
+use flume::Sender;
 use std::io::Cursor;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 
+use mc_registry::client_bound::play::Disconnect;
 use tokio::net::TcpStream;
+use tokio::select;
 use tokio::sync::{RwLock, RwLockWriteGuard};
+use tokio::task::JoinHandle;
 use typemap::{Key, ShareMap};
 
 use mc_registry::mappings::Mappings;
@@ -12,40 +17,65 @@ use mc_serializer::serde::ProtocolVersion;
 
 use crate::buffer::{
     BorrowedPacketWriter, OwnedPacketReader, OwnedPacketWriter, PacketFuture, PacketReader,
-    PacketWriter, PacketWriterGeneric,
+    PacketWriter, PacketWriterGeneric, RawFuture,
 };
 use crate::encryption::{Codec, Compressor};
 
 pub type Context<'a> = BufferRegistryEngineContext<'a>;
+
+pub trait InnerMapAccessor: Send + Sync {
+    fn data(&self) -> &ArcLocked<ShareMap>;
+
+    fn insert_data<K: Key>(self_ref: Arc<RwLock<Self>>, value: K::Value) -> RawFuture<'static, ()>
+    where
+        K::Value: Send + Sync,
+        Self: 'static,
+    {
+        Box::pin(async move {
+            let read = self_ref.read().await;
+            let mut map_write = read.data().write().await;
+            map_write.insert::<K>(value);
+        })
+    }
+
+    fn clone_data<K: Key>(self_ref: Arc<RwLock<Self>>) -> RawFuture<'static, Option<K::Value>>
+    where
+        K::Value: Send + Sync + Clone,
+        Self: 'static,
+    {
+        Box::pin(async move {
+            let read = self_ref.read().await;
+            let map_read = read.data().read().await;
+            map_read.get::<K>().cloned()
+        })
+    }
+
+    fn map_inner(self_ref: Arc<RwLock<Self>>) -> RawFuture<'static, ArcLocked<ShareMap>>
+    where
+        Self: 'static,
+    {
+        Box::pin(async move {
+            let read = self_ref.read().await;
+            Arc::clone(read.data())
+        })
+    }
+}
 
 pub struct BufferRegistryEngineContext<'a> {
     packet_sender: BorrowedPacketWriter<'a>,
     context_data: ArcLocked<ShareMap>,
 }
 
-impl<'a> BufferRegistryEngineContext<'a> {
-    pub async fn insert_data<K: Key>(self_ref: Arc<RwLock<Self>>, value: K::Value)
-    where
-        K::Value: Send + Sync,
-    {
-        let read = self_ref.read().await;
-        let mut map_write = read.context_data.write().await;
-        map_write.insert::<K>(value);
+impl<'a> InnerMapAccessor for BufferRegistryEngineContext<'a> {
+    fn data(&self) -> &ArcLocked<ShareMap> {
+        &self.context_data
     }
+}
 
-    pub async fn clone_data<K: Key>(self_ref: Arc<RwLock<Self>>) -> Option<K::Value>
-    where
-        K::Value: Send + Sync + Clone,
-    {
-        let read = self_ref.read().await;
-        let map_read = read.context_data.read().await;
-        map_read.get::<K>().cloned()
-    }
-
-    pub async fn map_inner(self_ref: Arc<RwLock<Self>>) -> ArcLocked<ShareMap> {
-        let read = self_ref.read().await;
-        Arc::clone(&read.context_data)
-    }
+#[derive(Clone)]
+pub struct PacketSender {
+    inner: Sender<Vec<u8>>,
+    protocol_version: ProtocolVersion,
 }
 
 impl<'a> PacketWriter for BufferRegistryEngineContext<'a> {
@@ -54,6 +84,21 @@ impl<'a> PacketWriter for BufferRegistryEngineContext<'a> {
         packet: Packet,
     ) -> PacketFuture<'b, ()> {
         self.packet_sender.send_packet(packet)
+    }
+}
+
+impl PacketWriter for PacketSender {
+    fn send_packet<'a, Packet: Mappings<PacketType = Packet> + Send + Sync + 'a>(
+        &'a mut self,
+        packet: Packet,
+    ) -> PacketFuture<'a, ()> {
+        let protocol_version = self.protocol_version;
+        let send_clone = self.inner.clone();
+        Box::pin(async move {
+            let buffer = Packet::create_packet_buffer(protocol_version, packet)?;
+            send_clone.send_async(buffer).await?;
+            Ok(())
+        })
     }
 }
 
@@ -103,7 +148,6 @@ impl BufferRegistryEngine {
             if (predicate)(data, &mut write_lock) {
                 break;
             }
-
         }
         Ok(())
     }
@@ -153,6 +197,109 @@ impl BufferRegistryEngine {
 
     pub fn protocol_version(&self) -> ProtocolVersion {
         self.packet_writer.protocol_version()
+    }
+
+    pub async fn split_out(
+        self,
+        registry: StateRegistry<'static, ConnectedPlayerContext>,
+        unexpected_close_disconnect: Disconnect,
+    ) -> anyhow::Result<PacketSender> {
+        let protocol_version = self.protocol_version();
+
+        let BufferRegistryEngine {
+            mut packet_reader,
+            mut packet_writer,
+            context_data,
+        } = self;
+        {
+            let mut data = context_data.write().await;
+            data.clear();
+            drop(data)
+        }
+
+        let (flume_packet_writer, flume_packet_reader) = flume::unbounded();
+
+        let packet_sender = PacketSender {
+            inner: flume_packet_writer,
+            protocol_version,
+        };
+
+        let packet_writer_handle: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
+            loop {
+                let next_packet = flume_packet_reader.recv_async().await?;
+
+                let mut next_packet = if let Some(compressor) = packet_writer.compression() {
+                    compressor.compress(next_packet)?
+                } else {
+                    Compressor::uncompressed(next_packet)?
+                };
+
+                packet_writer.encrypt(&mut next_packet);
+
+                packet_writer.writer().write_all(&next_packet).await?;
+            }
+        });
+
+        let writer_context_sender = packet_sender.clone();
+        let packet_reader_handle: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
+            let locked_registry = arc_lock(registry);
+            let context = arc_lock(ConnectedPlayerContext {
+                packet_sender: writer_context_sender,
+                data: context_data,
+            });
+
+            loop {
+                let reg_clone = Arc::clone(&locked_registry);
+                let context_clone = Arc::clone(&context);
+                let next_packet = Cursor::new(packet_reader.loop_read().await?);
+                if let Some(unhandled) =
+                    StateRegistry::emit(reg_clone, context_clone, next_packet).await?
+                {
+                    log::warn!("Unhandled Packet: {}", unhandled);
+                }
+            }
+        });
+
+        let mut selector_packet_sender_clone = packet_sender.clone();
+        select! {
+            val = packet_writer_handle => {
+                if let Err(err) = val {
+                    log::error!("Packet writer closed with error: {:?}", err);
+                } else {
+                    log::trace!("Packet writer closed without an error.");
+                }
+            }
+            val = packet_reader_handle => {
+                if let Err(err) = val {
+                    selector_packet_sender_clone.send_packet(unexpected_close_disconnect).await?;
+                    log::error!("Packet writer closed with error: {:?}", err);
+                } else {
+                    log::trace!("Packet writer closed without an error.");
+                }
+            }
+        };
+
+        Ok(packet_sender)
+    }
+}
+
+pub struct ConnectedPlayerContext {
+    packet_sender: PacketSender,
+    data: ArcLocked<ShareMap>,
+}
+
+impl InnerMapAccessor for ConnectedPlayerContext {
+    fn data(&self) -> &ArcLocked<ShareMap> {
+        &self.data
+    }
+}
+
+impl PacketWriter for ConnectedPlayerContext {
+    fn send_packet<'a, Packet: Mappings<PacketType = Packet> + Send + Sync + 'a>(
+        &'a mut self,
+        packet: Packet,
+    ) -> PacketFuture<'a, ()> {
+        self.packet_sender.send_packet(packet)
     }
 }
 
