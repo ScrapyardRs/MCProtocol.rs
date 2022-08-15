@@ -199,11 +199,15 @@ impl BufferRegistryEngine {
         self.packet_writer.protocol_version()
     }
 
-    pub async fn split_out(
+    pub async fn split_out<F>(
         self,
         registry: StateRegistry<'static, ConnectedPlayerContext>,
         unexpected_close_disconnect: Disconnect,
-    ) -> anyhow::Result<PacketSender> {
+        context_initializer: F,
+    ) -> anyhow::Result<PacketSender>
+    where
+        F: FnOnce(&mut RwLockWriteGuard<ShareMap>),
+    {
         let protocol_version = self.protocol_version();
 
         let BufferRegistryEngine {
@@ -214,6 +218,7 @@ impl BufferRegistryEngine {
         {
             let mut data = context_data.write().await;
             data.clear();
+            (context_initializer)(&mut data);
             drop(data)
         }
 
