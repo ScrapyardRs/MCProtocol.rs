@@ -119,7 +119,7 @@ impl Palette {
                     wrap_struct_context!("palette_length", palette_length.size(protocol_version))?;
                 wrap_struct_context!("palette", palette.size(protocol_version)).map(|x| x + i)
             }
-            Palette::Direct => Ok(1),
+            Palette::Direct => Ok(0),
         }
     }
 }
@@ -627,6 +627,22 @@ impl Serialize for Chunk {
             "chunk_data",
             self.chunk_sections.serialize(&mut buffer, protocol_version)
         )?;
+        for chunk_section in &self.chunk_sections {
+            let initial = buffer.len();
+            wrap_struct_context!(
+                "chunk_data",
+                chunk_section.serialize(&mut buffer, protocol_version)
+            )?;
+            let expected = chunk_section.size(protocol_version)?;
+            let actual = buffer.len() - initial;
+            println!(
+                "Expected size of chunk section: {}, actual size: {}",
+                expected, actual
+            );
+            if expected != actual {
+                println!("Chunk section dump: {:?}", chunk_section);
+            }
+        }
         println!(
             "Expected buffer size: {}; Buffer size: {}",
             data_size,

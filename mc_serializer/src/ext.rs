@@ -833,8 +833,7 @@ impl BitSet {
         Ok(match self {
             ZeroStorage { .. } => 1, // VarInt(0) is size of 1 byte
             SimpleStorage { size, raw, bits } => {
-                VarInt::from(Self::expected_size(*size, *bits)).size(protocol_version)?
-                    + (raw.len() as i32 * 8)
+                VarInt::from(raw.len() as i32).size(protocol_version)? + (raw.len() as i32 * 8)
             }
         })
     }
