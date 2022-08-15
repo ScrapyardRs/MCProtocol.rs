@@ -635,19 +635,7 @@ impl Serialize for Chunk {
             )?;
             let expected = chunk_section.size(protocol_version)?;
             let actual = buffer.len() - initial;
-            println!(
-                "Expected size of chunk section: {}, actual size: {}",
-                expected, actual
-            );
-            if expected as usize != actual {
-                println!("Chunk section dump: {:?}", chunk_section);
-            }
         }
-        println!(
-            "Expected buffer size: {}; Buffer size: {}",
-            data_size,
-            buffer.len()
-        );
         wrap_struct_context!("chunk_data", buffer.serialize(writer, protocol_version))
     }
 
