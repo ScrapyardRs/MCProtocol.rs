@@ -108,6 +108,13 @@ pub struct BufferRegistryEngine {
     context_data: ArcLocked<ShareMap>,
 }
 
+pub enum EngineCloseContext {
+    WriterCloseUnexpected,
+    WriterCloseExpected,
+    ReaderCloseUnexpected,
+    ReaderCloseExpected,
+}
+
 impl BufferRegistryEngine {
     pub fn create(stream: TcpStream) -> Self {
         let (read, write) = stream.into_split();
@@ -199,14 +206,16 @@ impl BufferRegistryEngine {
         self.packet_writer.protocol_version()
     }
 
-    pub async fn split_out<F>(
+    pub async fn split_out<F, F2>(
         self,
         registry: StateRegistry<'static, ConnectedPlayerContext>,
         unexpected_close_disconnect: Disconnect,
         context_initializer: F,
+        termination_hook: F2,
     ) -> anyhow::Result<PacketSender>
     where
         F: FnOnce(&mut RwLockWriteGuard<ShareMap>),
+        F2: FnOnce(EngineCloseContext),
     {
         let protocol_version = self.protocol_version();
 
@@ -268,18 +277,21 @@ impl BufferRegistryEngine {
         let mut selector_packet_sender_clone = packet_sender.clone();
         select! {
             val = packet_writer_handle => {
-                if let Err(err) = val {
+                if let Err(err) = &val {
                     log::error!("Packet writer closed with error: {:?}", err);
+                    (termination_hook)((EngineCloseContext::WriterCloseUnexpected));
                 } else {
                     log::trace!("Packet writer closed without an error.");
+                    (termination_hook)((EngineCloseContext::WriterCloseExpected));
                 }
             }
             val = packet_reader_handle => {
-                if let Err(err) = val {
-                    selector_packet_sender_clone.send_packet(unexpected_close_disconnect).await?;
+                if let Err(err) = &val {
                     log::error!("Packet writer closed with error: {:?}", err);
+                    (termination_hook)((EngineCloseContext::ReaderCloseUnexpected));
                 } else {
                     log::trace!("Packet writer closed without an error.");
+                    (termination_hook)((EngineCloseContext::ReaderCloseExpected));
                 }
             }
         };
