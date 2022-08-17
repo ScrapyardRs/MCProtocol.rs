@@ -1,6 +1,6 @@
 use crate::Either;
-use mc_serializer::ext::BitSet::{SimpleStorage, ZeroStorage};
-use mc_serializer::ext::{BitSet, BitSetValidationError, BitSetVisitor};
+use mc_serializer::ext::BitStorage::{SimpleStorage, ZeroStorage};
+use mc_serializer::ext::{BitStorage, BitSetValidationError, BitSetVisitor};
 use mc_serializer::primitive::VarInt;
 use mc_serializer::serde::{Contextual, Deserialize, ProtocolVersion, Serialize};
 use mc_serializer::{contextual, wrap_indexed_struct_context, wrap_struct_context};
@@ -128,7 +128,7 @@ impl Palette {
 pub struct PaletteContainer {
     bits_per_entry: u8,
     palette: Palette,
-    storage: BitSet,
+    storage: BitStorage,
 }
 
 impl PaletteContainer {
@@ -174,7 +174,7 @@ impl PaletteContainer {
                     }
                     x => Palette::Direct,
                 };
-                let mut new_bitset = BitSet::new(strategy.locked_entry_count(), bits_per_entry);
+                let mut new_bitset = BitStorage::new(strategy.locked_entry_count(), bits_per_entry);
                 for x in 0..(new_size as i32 - 1) {
                     let out = self.storage.get(x)?;
                     new_bitset.set(x, new_palette.id_for(out.into()).assert_left())?;
@@ -217,7 +217,7 @@ impl PaletteContainer {
         }
         wrap_struct_context!(
             "storage",
-            BitSet::to_writer(&self.storage, write, protocol_version)
+            BitStorage::to_writer(&self.storage, write, protocol_version)
         )
     }
 
@@ -245,7 +245,7 @@ impl PaletteContainer {
                 PaletteContainer {
                     bits_per_entry,
                     palette: Palette::SingleValue { block_type_id },
-                    storage: BitSet::from_reader(
+                    storage: BitStorage::from_reader(
                         read,
                         0,
                         strategy.locked_entry_count(),
@@ -264,7 +264,7 @@ impl PaletteContainer {
                         palette_length,
                         palette,
                     },
-                    storage: BitSet::from_reader(
+                    storage: BitStorage::from_reader(
                         read,
                         if matches!(strategy, Strategy::Biome) {
                             bits_per_entry
@@ -287,7 +287,7 @@ impl PaletteContainer {
                         palette_length,
                         palette,
                     },
-                    storage: BitSet::from_reader(
+                    storage: BitStorage::from_reader(
                         read,
                         4,
                         strategy.locked_entry_count(),
@@ -306,7 +306,7 @@ impl PaletteContainer {
                         palette_length,
                         palette,
                     },
-                    storage: BitSet::from_reader(
+                    storage: BitStorage::from_reader(
                         read,
                         x,
                         strategy.locked_entry_count(),
@@ -317,7 +317,7 @@ impl PaletteContainer {
             x => PaletteContainer {
                 bits_per_entry,
                 palette: Palette::Direct,
-                storage: BitSet::from_reader(
+                storage: BitStorage::from_reader(
                     read,
                     match strategy {
                         Strategy::Section => Strategy::SECTION_DIRECT_ENTRY_SIZE,
@@ -397,14 +397,14 @@ impl Deserialize for ChunkSection {
     }
 }
 
-fn deserialize_heightmap_bitset<'de, D>(deserializer: D) -> Result<BitSet, D::Error>
+fn deserialize_heightmap_bitset<'de, D>(deserializer: D) -> Result<BitStorage, D::Error>
 where
     D: Deserializer<'de>,
 {
-    deserializer.deserialize_any(BitSetVisitor::new(BitSet::new(256, 9)))
+    deserializer.deserialize_any(BitSetVisitor::new(BitStorage::new(256, 9)))
 }
 
-fn serialize_heightmap_bitset<S>(item: &BitSet, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_heightmap_bitset<S>(item: &BitStorage, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -418,13 +418,13 @@ pub struct HeightMaps {
         deserialize_with = "deserialize_heightmap_bitset",
         serialize_with = "serialize_heightmap_bitset"
     )]
-    world_surface: BitSet,
+    world_surface: BitStorage,
     #[serde(rename = "MOTION_BLOCKING")]
     #[serde(
         deserialize_with = "deserialize_heightmap_bitset",
         serialize_with = "serialize_heightmap_bitset"
     )]
-    motion_blocking: BitSet,
+    motion_blocking: BitStorage,
 }
 
 impl HeightMaps {
@@ -432,7 +432,7 @@ impl HeightMaps {
         x + (z * 16)
     }
 
-    fn get_first_available(bit_set: &BitSet, index: i32) -> Result<i32, BitSetValidationError> {
+    fn get_first_available(bit_set: &BitStorage, index: i32) -> Result<i32, BitSetValidationError> {
         bit_set.get(index).map(|x| x + DEFAULT_WORLD_MIN)
     }
 
@@ -511,8 +511,8 @@ impl Chunk {
             min_height,
             max_height,
             height_maps: HeightMaps {
-                world_surface: BitSet::new(256, 9),
-                motion_blocking: BitSet::new(256, 9),
+                world_surface: BitStorage::new(256, 9),
+                motion_blocking: BitStorage::new(256, 9),
             },
             chunk_sections: section_vec,
         }
@@ -562,7 +562,7 @@ impl Chunk {
             palette: Palette::SingleValue {
                 block_type_id: block_id,
             },
-            storage: BitSet::new(0, 0),
+            storage: BitStorage::new(0, 0),
         };
         for x in 0..15 {
             for z in 0..15 {

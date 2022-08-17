@@ -6,7 +6,7 @@ use crate::serde::{
 use crate::{wrap_indexed_struct_context, wrap_struct_context};
 use bytes::Buf;
 
-use crate::ext::BitSet::SimpleStorage;
+use crate::ext::BitStorage::SimpleStorage;
 use nbt::ser::Encoder;
 use serde::de::{EnumAccess, MapAccess, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::io::{Cursor, ErrorKind, Read, Write};
-use BitSet::ZeroStorage;
+use BitStorage::ZeroStorage;
 
 impl<T: Contextual> Contextual for (VarInt, Vec<T>) {
     fn context() -> String {
@@ -430,7 +430,7 @@ const fn false0() -> bool {
 
 #[derive(serde_derive::Serialize, Debug)]
 #[serde(untagged)]
-pub enum BitSet {
+pub enum BitStorage {
     ZeroStorage {
         #[serde(skip)]
         size: i32,
@@ -448,11 +448,11 @@ pub enum BitSet {
 }
 
 pub struct BitSetVisitor {
-    seeded_bitset: BitSet,
+    seeded_bitset: BitStorage,
 }
 
 impl BitSetVisitor {
-    pub fn new(seed: BitSet) -> Self {
+    pub fn new(seed: BitStorage) -> Self {
         Self {
             seeded_bitset: seed,
         }
@@ -461,13 +461,13 @@ impl BitSetVisitor {
     fn expected_size(&self) -> i32 {
         match &self.seeded_bitset {
             ZeroStorage { .. } => 0,
-            SimpleStorage { size, bits, .. } => BitSet::expected_size(*size, *bits),
+            SimpleStorage { size, bits, .. } => BitStorage::expected_size(*size, *bits),
         }
     }
 }
 
 impl<'de> Visitor<'de> for BitSetVisitor {
-    type Value = BitSet;
+    type Value = BitStorage;
 
     fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
         write!(
@@ -563,7 +563,7 @@ impl Display for BitSetValidationError {
     }
 }
 
-impl BitSet {
+impl BitStorage {
     pub fn new(size: i32, bits: i32) -> Self {
         if size == 0 || bits == 0 {
             ZeroStorage {
@@ -840,10 +840,10 @@ impl BitSet {
 
     pub fn get_raw(&self) -> Vec<i64> {
         match self {
-            BitSet::ZeroStorage { raw, .. } => raw.clone(),
-            BitSet::SimpleStorage { raw, .. } => raw.clone(),
+            BitStorage::ZeroStorage { raw, .. } => raw.clone(),
+            BitStorage::SimpleStorage { raw, .. } => raw.clone(),
         }
     }
 }
 
-context!(BitSet);
+context!(BitStorage);

@@ -3,17 +3,22 @@ use proc_macro2::{Ident, Punct, Spacing, TokenStream, TokenTree};
 use quote::ToTokens;
 use syn::{Attribute, DataEnum, DeriveInput, Variant};
 
-pub fn parse_key_type(ident: &Ident, attributes: &Vec<Attribute>) -> TokenStream {
+pub fn parse_key_type(attributes: &Vec<Attribute>) -> Option<TokenStream> {
     for attr in attributes {
         if let Some(segment) = attr.path.segments.first() {
             if segment.ident == "key" {
-                return attr
-                    .parse_args()
-                    .expect("A key should provide an associated value.");
+                return Some(
+                    attr.parse_args()
+                        .expect("A key should provide an associated value."),
+                );
             }
         }
     }
-    panic!("Failed to resolve key for enum {}.", ident)
+    None
+}
+
+pub fn parse_variant_key_type(attributes: &Vec<Attribute>, super_key: TokenStream) -> TokenStream {
+    parse_key_type(attributes).unwrap_or(quote::quote!(#super_key::from(ordinal)))
 }
 
 pub fn is_default_variant(attributes: &Vec<Attribute>) -> bool {
@@ -28,6 +33,7 @@ pub fn is_default_variant(attributes: &Vec<Attribute>) -> bool {
 }
 
 struct VariantWrapper {
+    ordinal: i32,
     key: TokenStream,
     fields: FieldsWrapper,
     full_path: TokenStream,
@@ -35,8 +41,13 @@ struct VariantWrapper {
 }
 
 impl VariantWrapper {
-    pub fn new(struct_ident: &Ident, variant: &Variant) -> Self {
-        let key = parse_key_type(struct_ident, &variant.attrs);
+    pub fn new(
+        ordinal: i32,
+        super_key: TokenStream,
+        struct_ident: &Ident,
+        variant: &Variant,
+    ) -> Self {
+        let key = parse_variant_key_type(&variant.attrs, super_key);
         let is_default = is_default_variant(&variant.attrs);
         let mut struct_context = TokenStream::new();
         struct_ident.to_tokens(&mut struct_context);
@@ -47,6 +58,7 @@ impl VariantWrapper {
         let fields =
             FieldsWrapper::new(&variant.fields, quote::quote!(stringify!(#struct_context)));
         Self {
+            ordinal,
             key,
             fields,
             full_path: quote::quote!(#struct_context),
@@ -81,6 +93,7 @@ impl VariantWrapper {
         let serializer_stmt = self.fields.serializer();
         let key_err = self.key_err();
         let key = &self.key;
+        let ordinal = self.ordinal;
         let key_ser = if passthrough {
             None
         } else {
@@ -90,6 +103,7 @@ impl VariantWrapper {
         };
         quote::quote! {
             #enum_variant_def {
+                let ordinal = #ordinal;
                 #key_ser
                 #variant_let_map
                 #serializer_stmt
@@ -104,6 +118,7 @@ impl VariantWrapper {
         let sizer_stmt = self.fields.sizer();
         let key_err = self.key_err();
         let key = &self.key;
+        let ordinal = self.ordinal;
         let key_ser = if passthrough {
             None
         } else {
@@ -113,6 +128,7 @@ impl VariantWrapper {
         };
         quote::quote! {
             #enum_variant_def {
+                let ordinal: i32 = #ordinal;
                 let mut size = 0;
                 #key_ser
                 #variant_let_map
@@ -135,7 +151,9 @@ impl VariantWrapper {
     pub fn deserializer(&self) -> TokenStream {
         let deserializer = self.deserializer_raw();
         let key = &self.key;
+        let ordinal = self.ordinal;
         quote::quote! {
+            let ordinal: i32 = #ordinal;
             if key_value == #key {
                 #deserializer
             }
@@ -175,22 +193,29 @@ macro_rules! key_deser {
 pub fn expand_deserialize_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) -> TokenStream {
     let enum_ident = &derive_input.ident;
 
-    let key_type = parse_key_type(&derive_input.ident, &derive_input.attrs);
+    let key_type = parse_key_type(&derive_input.attrs)
+        .expect(format!("No key defined for enum {:?}", derive_input.ident).as_str());
 
     let passthrough_key = key_type.to_string().eq("pass");
 
     let mut variant_deserializers = Vec::new();
     variant_def!(variant_default);
 
-    for variant in &syn_enum.variants {
-        let variant_wrapper = VariantWrapper::new(enum_ident, variant);
+    for (index, variant) in syn_enum.variants.iter().enumerate() {
+        let variant_wrapper =
+            VariantWrapper::new(index as i32, key_type.clone(), enum_ident, variant);
         variant_deserializers.push(variant_wrapper.deserializer());
         if variant_wrapper.is_default {
             variant_default = Some(variant_wrapper.deserializer_raw());
         }
     }
 
-    key_deser!(key_value_deserializer, passthrough_key, key_type, enum_ident);
+    key_deser!(
+        key_value_deserializer,
+        passthrough_key,
+        key_type,
+        enum_ident
+    );
 
     quote::quote! {
         impl mc_serializer::serde::Deserialize for #enum_ident {
@@ -209,15 +234,17 @@ pub fn expand_deserialize_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) 
 pub fn expand_serialize_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) -> TokenStream {
     let enum_ident = &derive_input.ident;
 
-    let key_type = parse_key_type(&derive_input.ident, &derive_input.attrs);
+    let key_type = parse_key_type(&derive_input.attrs)
+        .expect(format!("No key defined for enum {:?}", derive_input.ident).as_str());
 
     let passthrough_key = key_type.to_string().eq("pass");
 
     let mut variant_serializers = Vec::new();
     let mut variant_sizers = Vec::new();
 
-    for variant in &syn_enum.variants {
-        let variant_wrapper = VariantWrapper::new(enum_ident, variant);
+    for (index, variant) in syn_enum.variants.iter().enumerate() {
+        let variant_wrapper =
+            VariantWrapper::new(index as i32, key_type.clone(), enum_ident, variant);
         variant_serializers.push(variant_wrapper.serializer(passthrough_key));
         variant_sizers.push(variant_wrapper.sizer(passthrough_key));
     }
@@ -246,7 +273,8 @@ pub fn expand_serialize_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) ->
 pub fn expand_serial_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) -> TokenStream {
     let enum_ident = &derive_input.ident;
 
-    let key_type = parse_key_type(&derive_input.ident, &derive_input.attrs);
+    let key_type = parse_key_type(&derive_input.attrs)
+        .expect(format!("No key defined for enum {:?}", derive_input.ident).as_str());
 
     let passthrough_key = key_type.to_string().eq("pass");
 
@@ -255,8 +283,9 @@ pub fn expand_serial_enum(derive_input: &DeriveInput, syn_enum: &DataEnum) -> To
     let mut variant_deserializers = Vec::new();
     variant_def!(variant_default);
 
-    for variant in &syn_enum.variants {
-        let variant_wrapper = VariantWrapper::new(enum_ident, variant);
+    for (index, variant) in syn_enum.variants.iter().enumerate() {
+        let variant_wrapper =
+            VariantWrapper::new(index as i32, key_type.clone(), enum_ident, variant);
         variant_serializers.push(variant_wrapper.serializer(passthrough_key));
         variant_sizers.push(variant_wrapper.sizer(passthrough_key));
         variant_deserializers.push(variant_wrapper.deserializer());

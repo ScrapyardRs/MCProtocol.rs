@@ -24,8 +24,42 @@ pub trait Mappings {
 }
 
 #[macro_export]
+macro_rules! easy_mappings { // how do we handle enums
+    ($($(#[$($extra_tokens:tt)*])* $registrar_type:ident {
+        def $packet_id:literal;
+        $(def $latter_packet_id:literal ($protocol_from:path => $protocol_to:path) => $latter_mappings_type:ty;)*
+        $(since $since_protocol:path;)?
+        $($(
+            $(#[$($field_macros:tt)*])*
+            $field_ident:ident: $field_type:ty,
+        )+)?
+    })*) => {
+        $(
+        #[derive($crate::prelude::Serial)]
+        $(#[$($extra_tokens)*])*
+        pub struct $registrar_type{$(
+            $(
+                $(#[$($field_macros)*])*
+                pub $field_ident: $field_type,
+            )*
+        )?}
+        )*
+
+        $crate::create_mappings! {
+            $(
+                $registrar_type {
+                    def $packet_id;
+                    $(def $latter_pack_id ($protocol_from => $protocol_to) => $latter_mappings_type:ty;)*
+                    $($since_protocol;)?
+                }
+            )*
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! create_mappings {
-    ($($registrar_type:ty {
+    ($($registrar_type:ident {
         def $packet_id:literal;
         $(def $latter_packet_id:literal ($protocol_from:path => $protocol_to:path) => $latter_mappings_type:ty;)*
         $(since $since_protocol:path;)?
