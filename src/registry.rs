@@ -1,4 +1,10 @@
-use std::{collections::HashMap, future::Future, io::Cursor, ops::Range, sync::Arc};
+use std::{
+    collections::HashMap,
+    future::Future,
+    io::Cursor,
+    ops::RangeInclusive,
+    sync::Arc,
+};
 
 use drax::{
     transport::{
@@ -181,7 +187,7 @@ pub trait RegistrationCandidate {
 }
 
 pub struct Importer {
-    range: Range<i32>,
+    range: RangeInclusive<i32>,
     protocol_version: i32,
 }
 
@@ -195,14 +201,14 @@ impl Importer {
 impl From<(VarInt, VarInt)> for Importer {
     fn from((single, protocol_version): (VarInt, VarInt)) -> Self {
         Importer {
-            range: single..single,
+            range: single..=single,
             protocol_version,
         }
     }
 }
 
-impl From<(Range<VarInt>, VarInt)> for Importer {
-    fn from((range, protocol_version): (Range<VarInt>, VarInt)) -> Self {
+impl From<(RangeInclusive<VarInt>, VarInt)> for Importer {
+    fn from((range, protocol_version): (RangeInclusive<VarInt>, VarInt)) -> Self {
         Importer {
             range,
             protocol_version,
@@ -213,17 +219,17 @@ impl From<(Range<VarInt>, VarInt)> for Importer {
 #[macro_export]
 macro_rules! import_registrations {
     ($($item:ident {
-        $($from:literal$(..$to:literal)? -> $id:literal,)*
+        $($from:tt$(..$to:tt)? -> $id:tt,)*
     })*) => {
         $(
                 impl $crate::registry::RegistrationCandidate for $item {
                     fn register_all<F: FnMut((drax::VarInt, drax::VarInt))>(mut function: F) {
-                        $($crate::registry::Importer::from(($from$(..$to)?, $id)).consume(&mut function);)*
+                        $($crate::registry::Importer::from(($from$(..=$to)?, $id)).consume(&mut function);)*
                     }
 
                     fn scoped_registration(protocol_version: drax::VarInt) -> Option<drax::VarInt> {
                         match protocol_version {
-                            $($from$(..$to)? => Some($id),)*
+                            $($from$(..=$to)? => Some($id),)*
                             _ => None,
                         }
                     }

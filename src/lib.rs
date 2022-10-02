@@ -5,3 +5,6 @@
 //! This project does *NOT* aim to mimic or act like a vanilla client or server. <br />
 
 pub mod registry;
+pub mod crypto;
+pub mod protocol;
+pub mod chat;

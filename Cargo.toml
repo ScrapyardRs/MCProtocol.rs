@@ -8,4 +8,11 @@ edition = "2021"
 [dependencies]
 drax = { git = "https://github.com/MCEntropy/Drax", branch = "develop", features = ["full"] }
 drax_derive = { git = "https://github.com/MCEntropy/Drax", branch = "develop" }
-tokio = { version = "1.21.2", features = ["sync"] }
+data-encoding = "2.3.2"
+openssl = "0.10.41"
+rand = "0.8.5"
+rsa = "0.5"
+rsa-der = "0.2.1"
+serde_derive = "1.0.145"
+serde = "1.0.145"
+uuid = { version = "1.1.2", features = ["serde"] }
