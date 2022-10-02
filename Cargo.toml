@@ -1,13 +1,11 @@
-[workspace]
-members = [
-    "encryption_utils",
-    "mcprotocol_dev",
-    "mc_buffer",
-    "mc_chat",
-    "mc_commands",
-    "mc_registry",
-    "mc_registry_derive",
-    "mc_serializer",
-    "mc_serializer_derive",
-    "mc_level",
-]
+[package]
+name = "mcprotocol"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+drax = { git = "https://github.com/MCEntropy/Drax", branch = "develop", features = ["full"] }
+drax_derive = { git = "https://github.com/MCEntropy/Drax", branch = "develop" }
+tokio = { version = "1.21.2", features = ["sync"] }
