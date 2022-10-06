@@ -8,3 +8,4 @@ pub mod registry;
 pub mod crypto;
 pub mod protocol;
 pub mod chat;
+pub mod prelude;
