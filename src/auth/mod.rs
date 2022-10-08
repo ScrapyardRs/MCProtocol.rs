@@ -5,8 +5,8 @@ pub mod mojang;
 const MOJANG_KEY: &[u8] = include_bytes!("yggdrasil_session_pubkey.der");
 
 pub struct AuthConfiguration {
-    server_private_key: MCPrivateKey,
-    compression_threshold: isize,
-    force_key_authentication: bool,
-    auth_url: Option<String>,
+    pub server_private_key: MCPrivateKey,
+    pub compression_threshold: isize,
+    pub force_key_authentication: bool,
+    pub auth_url: Option<String>,
 }

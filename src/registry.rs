@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use drax::prelude::BoxFuture;
 use drax::transport::frame::PacketFrame;
-use drax::transport::{DraxTransport, Result, TransportProcessorContext};
 use drax::transport::pipeline::ChainProcessor;
+use drax::transport::{DraxTransport, Error, Result, TransportProcessorContext};
 use drax::VarInt;
 
 pub const UNKNOWN_VERSION: VarInt = -2;
@@ -30,7 +30,8 @@ impl ChainProcessor for MCPacketWriter {
         Self::Input: Sized,
     {
         let mut packet_buffer = Cursor::new(Vec::with_capacity(
-            transport.precondition_size(context)? + drax::extension::size_var_int(packet_id, context)?,
+            transport.precondition_size(context)?
+                + drax::extension::size_var_int(packet_id, context)?,
         ));
         drax::extension::write_var_int_sync(packet_id, context, &mut packet_buffer)?;
         transport.write_to_transport(context, &mut packet_buffer)?;
@@ -47,14 +48,14 @@ impl drax::prelude::Key for ProtocolVersionKey {
 
 #[derive(Debug)]
 pub enum RegistryError {
-    NoHandlerFound((VarInt, VarInt)),
+    NoHandlerFound((VarInt, VarInt), Vec<u8>),
     DraxTransportError(drax::transport::Error),
 }
 
 impl Display for RegistryError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            RegistryError::NoHandlerFound((protocol_version, packet_id)) => {
+            RegistryError::NoHandlerFound((protocol_version, packet_id), _) => {
                 write!(
                     f,
                     "No handler found for protocol version: {}, packet id: {}",
@@ -88,6 +89,12 @@ pub trait AsyncPacketRegistry<Context, Output> {
 }
 
 impl std::error::Error for RegistryError {}
+
+impl From<Error> for RegistryError {
+    fn from(drax_err: Error) -> Self {
+        RegistryError::DraxTransportError(drax_err)
+    }
+}
 
 type AsyncPacketFunction<Context, Output> = dyn (for<'a> Fn(
         Cursor<Vec<u8>>,
@@ -175,7 +182,12 @@ impl<Context, Output> AsyncPacketRegistry<Context, Output>
         match self.mappings.get(&(protocol_version, packet_id)).cloned() {
             Some(func) => (func)(data_cursor, context, transport_context)
                 .map_err(RegistryError::DraxTransportError),
-            None => return Err(RegistryError::NoHandlerFound((protocol_version, packet_id))),
+            None => {
+                return Err(RegistryError::NoHandlerFound(
+                    (protocol_version, packet_id),
+                    data_cursor.into_inner(),
+                ))
+            }
         }
     }
 }
@@ -202,7 +214,7 @@ async_reg_ref_impl!(Arc);
 async_reg_ref_impl!(Rc);
 
 #[macro_export]
-macro_rules! packet {
+macro_rules! pin_fut {
     ($handle:expr) => {
         |t, ctx| Box::pin($handle(t, ctx))
     };

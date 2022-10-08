@@ -2,7 +2,7 @@ use super::MOJANG_KEY;
 use crate::auth::AuthConfiguration;
 use crate::chat::Chat;
 use crate::crypto::{private_key_to_der, sha1_message, CapturedRsaError, MCPublicKey};
-use crate::packet;
+use crate::pin_fut;
 use crate::pipeline::{
     AsyncMinecraftProtocolPipeline, BlankAsyncProtocolPipeline, BlankMcReadWrite,
     MinecraftProtocolWriter,
@@ -20,7 +20,7 @@ use drax::{Maybe, VarInt};
 use num_bigint::BigInt;
 use rand::RngCore;
 use reqwest::StatusCode;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
 use std::io::{Cursor, Write};
 use std::marker::PhantomData;
@@ -62,32 +62,19 @@ pub enum ValidationError {
     InvalidSharedSecret,
 }
 
-#[derive(Debug)]
-pub enum AuthError {
-    InvalidState,
-    KeyError(KeyError),
-    ValidationError(ValidationError),
-    TransportError(drax::transport::Error),
-    RegistryError(RegistryError),
+pub enum AuthError<W: AsyncWrite + Unpin + Sized> {
+    InvalidState(MinecraftProtocolWriter<W>),
+    KeyError(MinecraftProtocolWriter<W>, KeyError),
+    ValidationError(MinecraftProtocolWriter<W>, ValidationError),
+    TransportError(MinecraftProtocolWriter<W>, drax::transport::Error),
+    RegistryError(MinecraftProtocolWriter<W>, RegistryError),
 }
 
-impl From<RegistryError> for AuthError {
-    fn from(reg_err: RegistryError) -> Self {
-        Self::RegistryError(reg_err)
-    }
-}
-
-impl From<drax::transport::Error> for AuthError {
-    fn from(drax_err: drax::transport::Error) -> Self {
-        Self::TransportError(drax_err)
-    }
-}
-
-impl Display for AuthError {
+impl<W: AsyncWrite + Unpin + Sized> Display for AuthError<W> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AuthError::InvalidState => write!(f, "Invalid authentication state during login."),
-            AuthError::KeyError(key_err) => match key_err {
+            AuthError::InvalidState(_) => write!(f, "Invalid authentication state during login."),
+            AuthError::KeyError(_, key_err) => match key_err {
                 KeyError::Expired => write!(f, "Player key expired."),
                 KeyError::NoHolder => write!(f, "No holder for player key found."),
                 KeyError::NoKey => write!(f, "No key when expected."),
@@ -95,7 +82,7 @@ impl Display for AuthError {
                 KeyError::InvalidKey(_) => write!(f, "Player key invalid."),
                 KeyError::InvalidIdentifiedKey(_) => write!(f, "Player key improperly formatted."),
             },
-            AuthError::ValidationError(validation_err) => match validation_err {
+            AuthError::ValidationError(_, validation_err) => match validation_err {
                 ValidationError::VerifyMismatch => write!(f, "Encryption verification mismatch."),
                 ValidationError::DataSignatureInvalid => {
                     write!(f, "Encryption data signature is invalid.")
@@ -114,11 +101,11 @@ impl Display for AuthError {
                     )
                 }
             },
-            AuthError::TransportError(_) => {
+            AuthError::TransportError(_, _) => {
                 write!(f, "Generic transport error.")
             }
-            AuthError::RegistryError(registry_error) => match registry_error {
-                RegistryError::NoHandlerFound((protocol_version, packet_id)) => {
+            AuthError::RegistryError(_, registry_error) => match registry_error {
+                RegistryError::NoHandlerFound((protocol_version, packet_id), _) => {
                     write!(
                         f,
                         "No packet handler found for proto: {}, packet: {}",
@@ -133,7 +120,13 @@ impl Display for AuthError {
     }
 }
 
-impl std::error::Error for AuthError {}
+impl<W: AsyncWrite + Unpin + Sized> Debug for AuthError<W> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl<W: AsyncWrite + Unpin + Sized> std::error::Error for AuthError<W> {}
 
 enum AuthFunctionResponse {
     InvalidState,
@@ -361,15 +354,15 @@ pub struct AuthenticatedClient<R: AsyncRead, W: AsyncWrite> {
     pub key: Option<IdentifiedKey>,
 }
 
-pub async fn auth_client<W: AsyncWrite + Unpin + Sized, R: AsyncRead + Unpin + Sized>(
-    write: W,
+pub async fn auth_client<R: AsyncRead + Unpin + Sized, W: AsyncWrite + Unpin + Sized>(
     read: R,
+    write: W,
     handshake: Handshake,
     auth_config: Arc<AuthConfiguration>,
-) -> Result<AuthenticatedClient<DecryptRead<R>, EncryptedWriter<W>>, AuthError> {
+) -> Result<AuthenticatedClient<DecryptRead<R>, EncryptedWriter<W>>, AuthError<W>> {
     let mut auth_pipeline = AsyncMinecraftProtocolPipeline::from_handshake(read, &handshake);
-    auth_pipeline.register(packet!(login_start));
-    auth_pipeline.register(packet!(encryption_response));
+    auth_pipeline.register(pin_fut!(login_start));
+    auth_pipeline.register(pin_fut!(encryption_response));
 
     let mut packet_writer = MinecraftProtocolWriter::from_handshake(write, &handshake);
 
@@ -379,7 +372,12 @@ pub async fn auth_client<W: AsyncWrite + Unpin + Sized, R: AsyncRead + Unpin + S
         auth_config: auth_config.clone(),
     };
 
-    let (name, expected_uuid) = match auth_pipeline.execute_next_packet(&mut context).await? {
+    let matched = match auth_pipeline.execute_next_packet(&mut context).await {
+        Ok(matched) => matched,
+        Err(err) => return Err(AuthError::RegistryError(packet_writer, err)),
+    };
+
+    let (name, expected_uuid) = match matched {
         AuthFunctionResponse::LoginStartPass {
             key,
             name,
@@ -388,11 +386,15 @@ pub async fn auth_client<W: AsyncWrite + Unpin + Sized, R: AsyncRead + Unpin + S
             context.key = key;
             (name, expected_uuid)
         }
-        AuthFunctionResponse::ValidationError(err) => return Err(AuthError::ValidationError(err)),
-        AuthFunctionResponse::TransportError(err) => return Err(AuthError::TransportError(err)),
-        AuthFunctionResponse::KeyError(err) => return Err(AuthError::KeyError(err)),
-        AuthFunctionResponse::InvalidState => return Err(AuthError::InvalidState),
-        _ => return Err(AuthError::InvalidState),
+        AuthFunctionResponse::ValidationError(err) => {
+            return Err(AuthError::ValidationError(packet_writer, err))
+        }
+        AuthFunctionResponse::TransportError(err) => {
+            return Err(AuthError::TransportError(packet_writer, err))
+        }
+        AuthFunctionResponse::KeyError(err) => return Err(AuthError::KeyError(packet_writer, err)),
+        AuthFunctionResponse::InvalidState => return Err(AuthError::InvalidState(packet_writer)),
+        _ => return Err(AuthError::InvalidState(packet_writer)),
     };
 
     let key_der = private_key_to_der(&auth_config.server_private_key);
@@ -410,63 +412,74 @@ pub async fn auth_client<W: AsyncWrite + Unpin + Sized, R: AsyncRead + Unpin + S
         login_username: name,
     };
 
-    packet_writer.write_packet(encryption_request).await?;
+    if let Err(err) = packet_writer.write_packet(encryption_request).await {
+        return Err(AuthError::TransportError(packet_writer, err));
+    }
 
-    let (mut new_read, mut new_write, profile) = match auth_pipeline
-        .execute_next_packet(&mut context)
-        .await?
-    {
+    let matched = match auth_pipeline.execute_next_packet(&mut context).await {
+        Ok(matched) => matched,
+        Err(err) => return Err(AuthError::RegistryError(packet_writer, err)),
+    };
+
+    let (mut new_read, mut new_write, profile) = match matched {
         AuthFunctionResponse::AuthComplete {
             profile,
             shared_secret,
         } => {
             if let Some(expected_uuid) = expected_uuid.as_ref() {
                 if profile.id.ne(expected_uuid) {
-                    return Err(AuthError::ValidationError(ValidationError::InvalidData));
+                    return Err(AuthError::ValidationError(
+                        packet_writer,
+                        ValidationError::InvalidData,
+                    ));
                 }
             }
 
-            let read_stream =
-                match EncryptionStream::new_from_slices(&shared_secret, &shared_secret) {
-                    Ok(stream) => stream,
-                    Err(_) => {
-                        return Err(AuthError::ValidationError(
-                            ValidationError::InvalidSharedSecret,
-                        ))
-                    }
+            macro_rules! stream {
+                ($shared_secret:ident, $packet_writer:ident) => {
+                    match EncryptionStream::new_from_slices(&$shared_secret, &$shared_secret) {
+                        Ok(stream) => stream,
+                        Err(_) => {
+                            return Err(AuthError::ValidationError(
+                                $packet_writer,
+                                ValidationError::InvalidSharedSecret,
+                            ))
+                        }
+                    };
                 };
-            let write_stream =
-                match EncryptionStream::new_from_slices(&shared_secret, &shared_secret) {
-                    Ok(stream) => stream,
-                    Err(_) => {
-                        return Err(AuthError::ValidationError(
-                            ValidationError::InvalidSharedSecret,
-                        ))
-                    }
-                };
+            }
+
+            let read_stream = stream!(shared_secret, packet_writer);
+            let write_stream = stream!(shared_secret, packet_writer);
 
             let new_read = auth_pipeline.enable_decryption(read_stream);
             let new_write = packet_writer.enable_encryption(write_stream);
             (new_read, new_write, profile)
         }
-        AuthFunctionResponse::ValidationError(err) => return Err(AuthError::ValidationError(err)),
-        AuthFunctionResponse::TransportError(err) => return Err(AuthError::TransportError(err)),
-        AuthFunctionResponse::KeyError(err) => return Err(AuthError::KeyError(err)),
-        AuthFunctionResponse::InvalidState => return Err(AuthError::InvalidState),
-        _ => return Err(AuthError::InvalidState),
+        AuthFunctionResponse::ValidationError(err) => {
+            return Err(AuthError::ValidationError(packet_writer, err))
+        }
+        AuthFunctionResponse::TransportError(err) => {
+            return Err(AuthError::TransportError(packet_writer, err))
+        }
+        AuthFunctionResponse::KeyError(err) => return Err(AuthError::KeyError(packet_writer, err)),
+        AuthFunctionResponse::InvalidState => return Err(AuthError::InvalidState(packet_writer)),
+        _ => return Err(AuthError::InvalidState(packet_writer)),
     };
 
     if auth_config.compression_threshold >= 0 {
-        new_write
+        if let Err(err) = new_write
             .write_packet(SetCompression {
                 threshold: auth_config.compression_threshold as VarInt,
             })
-            .await?;
-        new_read.enable_compression(auth_config.compression_threshold);
-        new_write.enable_compression(auth_config.compression_threshold);
+            .await
+        {
+            log::warn!("Failed to enable compression {}.", err);
+        } else {
+            new_read.enable_compression(auth_config.compression_threshold);
+            new_write.enable_compression(auth_config.compression_threshold);
+        }
     };
-
-    new_write.write_packet(LoginSuccess::from(&profile)).await?;
 
     Ok(AuthenticatedClient {
         read_write: (

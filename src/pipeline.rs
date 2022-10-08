@@ -42,6 +42,24 @@ impl<R: AsyncRead, Context, PacketOutput>
         MappedAsyncPacketRegistry<Context, PacketOutput>,
     >
 {
+    pub fn empty(read: R) -> Self {
+        let mut context = TransportProcessorContext::new();
+
+        let pipeline = DraxTransportPipeline::new(
+            Box::new(FrameDecoder::new(-1)),
+            BytesMut::with_capacity(crate::MC_BUFFER_CAPACITY),
+        );
+
+        Self {
+            read,
+            registry: MappedAsyncPacketRegistry::new(UNKNOWN_VERSION),
+            processor_context: context,
+            drax_transport: pipeline,
+            _phantom_context: Default::default(),
+            _phantom_packet_output: Default::default(),
+        }
+    }
+
     pub fn from_handshake(read: R, handshake: &Handshake) -> Self {
         let mut context = TransportProcessorContext::new();
         context.insert_data::<ProtocolVersionKey>(handshake.protocol_version);
@@ -129,6 +147,10 @@ impl<
 impl<R: AsyncRead, Context, PacketOutput, Reg: AsyncPacketRegistry<Context, PacketOutput>>
     AsyncMinecraftProtocolPipeline<R, Context, PacketOutput, Reg>
 {
+    pub fn into_inner_read(self) -> R {
+        self.read
+    }
+
     pub fn with_registry<
         NContext,
         NPacketOutput,
