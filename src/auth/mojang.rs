@@ -474,6 +474,6 @@ pub async fn auth_client<W: AsyncWrite + Unpin + Sized, R: AsyncRead + Unpin + S
             new_write,
         ),
         profile,
-        key: None,
+        key: context.key,
     })
 }
