@@ -1,8 +1,5 @@
-use crate::auth::mojang::Context;
-use drax::prelude::BoxFuture;
-use drax::transport::{DraxTransport, Result, TransportProcessorContext};
-use drax::VarInt;
 use std::collections::HashMap;
+use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
 use std::io::Cursor;
 use std::marker::PhantomData;
@@ -10,8 +7,87 @@ use std::ops::RangeInclusive;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use drax::prelude::BoxFuture;
+use drax::transport::frame::PacketFrame;
+use drax::transport::{DraxTransport, Result, TransportProcessorContext};
+use drax::transport::pipeline::ChainProcessor;
+use drax::VarInt;
+
 pub const UNKNOWN_VERSION: VarInt = -2;
 pub const ALL_VERSIONS: VarInt = -1;
+
+pub struct MCPacketWriter;
+impl ChainProcessor for MCPacketWriter {
+    type Input = (VarInt, Box<dyn DraxTransport>);
+    type Output = PacketFrame;
+
+    fn process(
+        &mut self,
+        context: &mut TransportProcessorContext,
+        (packet_id, transport): Self::Input,
+    ) -> Result<Self::Output>
+    where
+        Self::Input: Sized,
+    {
+        let mut packet_buffer = Cursor::new(Vec::with_capacity(
+            transport.precondition_size(context)? + drax::extension::size_var_int(packet_id, context)?,
+        ));
+        drax::extension::write_var_int_sync(packet_id, context, &mut packet_buffer)?;
+        transport.write_to_transport(context, &mut packet_buffer)?;
+        Ok(PacketFrame {
+            data: packet_buffer.into_inner(),
+        })
+    }
+}
+
+pub struct ProtocolVersionKey;
+impl drax::prelude::Key for ProtocolVersionKey {
+    type Value = VarInt;
+}
+
+#[derive(Debug)]
+pub enum RegistryError {
+    NoHandlerFound((VarInt, VarInt)),
+    DraxTransportError(drax::transport::Error),
+}
+
+impl Display for RegistryError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RegistryError::NoHandlerFound((protocol_version, packet_id)) => {
+                write!(
+                    f,
+                    "No handler found for protocol version: {}, packet id: {}",
+                    protocol_version, packet_id
+                )
+            }
+            RegistryError::DraxTransportError(error) => {
+                write!(f, "Error found outside of handler, {}", error)
+            }
+        }
+    }
+}
+
+pub trait MutAsyncPacketRegistry<Context, Output>: AsyncPacketRegistry<Context, Output> {
+    fn register<
+        T: DraxTransport + RegistrationCandidate,
+        Func: (for<'a> Fn(&'a mut Context, T) -> BoxFuture<'a, Output>) + 'static,
+    >(
+        &mut self,
+        func: Func,
+    );
+}
+
+pub trait AsyncPacketRegistry<Context, Output> {
+    fn execute<'a>(
+        &'a self,
+        context: &'a mut Context,
+        transport_context: &'a mut TransportProcessorContext,
+        data: Vec<u8>,
+    ) -> std::result::Result<BoxFuture<'a, Output>, RegistryError>;
+}
+
+impl std::error::Error for RegistryError {}
 
 type AsyncPacketFunction<Context, Output> = dyn (for<'a> Fn(
         Cursor<Vec<u8>>,
@@ -20,12 +96,12 @@ type AsyncPacketFunction<Context, Output> = dyn (for<'a> Fn(
     ) -> Result<BoxFuture<'a, Output>>)
     + 'static;
 
-pub struct AsyncPacketRegistry<Context, Output> {
+pub struct MappedAsyncPacketRegistry<Context, Output> {
     staple: VarInt,
     mappings: HashMap<(VarInt, VarInt), Arc<AsyncPacketFunction<Context, Output>>>,
 }
 
-impl<Context, Output> Default for AsyncPacketRegistry<Context, Output> {
+impl<Context, Output> Default for MappedAsyncPacketRegistry<Context, Output> {
     fn default() -> Self {
         Self {
             staple: UNKNOWN_VERSION,
@@ -34,17 +110,21 @@ impl<Context, Output> Default for AsyncPacketRegistry<Context, Output> {
     }
 }
 
-impl<Context, Output> AsyncPacketRegistry<Context, Output> {
+impl<Context, Output> MappedAsyncPacketRegistry<Context, Output> {
     pub fn new(protocol_version: VarInt) -> Self {
         Self {
             staple: protocol_version,
             mappings: HashMap::new(),
         }
     }
+}
 
-    pub fn register<
+impl<Context, Output> MutAsyncPacketRegistry<Context, Output>
+    for MappedAsyncPacketRegistry<Context, Output>
+{
+    fn register<
         T: DraxTransport + RegistrationCandidate,
-        Func: (for<'a> Fn(&'a mut Context, T) -> BoxFuture<'a, Output>) + 'static,
+        Func: for<'a> Fn(&'a mut Context, T) -> BoxFuture<'a, Output> + 'static,
     >(
         &mut self,
         func: Func,
@@ -70,349 +150,63 @@ impl<Context, Output> AsyncPacketRegistry<Context, Output> {
     }
 }
 
-#[macro_export]
-macro_rules! pkt_ctx {
-    ($handle:ident) => {
-        |t, ctx| Box::pin($handle(t, ctx))
+impl<Context, Output> AsyncPacketRegistry<Context, Output>
+    for MappedAsyncPacketRegistry<Context, Output>
+{
+    fn execute<'a>(
+        &'a self,
+        context: &'a mut Context,
+        transport_context: &'a mut TransportProcessorContext,
+        data: Vec<u8>,
+    ) -> std::result::Result<BoxFuture<'a, Output>, RegistryError> {
+        let mut data_cursor = Cursor::new(data);
+        let packet_id = drax::extension::read_var_int_sync(transport_context, &mut data_cursor)
+            .map_err(RegistryError::DraxTransportError)?;
+
+        let protocol_version = if self.staple > 0 {
+            self.staple
+        } else {
+            transport_context
+                .retrieve_data::<ProtocolVersionKey>()
+                .cloned()
+                .unwrap_or(UNKNOWN_VERSION)
+        };
+
+        match self.mappings.get(&(protocol_version, packet_id)).cloned() {
+            Some(func) => (func)(data_cursor, context, transport_context)
+                .map_err(RegistryError::DraxTransportError),
+            None => return Err(RegistryError::NoHandlerFound((protocol_version, packet_id))),
+        }
+    }
+}
+
+macro_rules! async_reg_ref_impl {
+    ($wrapper:ident) => {
+        impl<Context, Output> AsyncPacketRegistry<Context, Output>
+            for $wrapper<MappedAsyncPacketRegistry<Context, Output>>
+        {
+            fn execute<'a>(
+                &'a self,
+                context: &'a mut Context,
+                transport_context: &'a mut TransportProcessorContext,
+                data: Vec<u8>,
+            ) -> std::result::Result<BoxFuture<'a, Output>, RegistryError> {
+                MappedAsyncPacketRegistry::execute(self, context, transport_context, data)
+            }
+        }
     };
 }
 
-// start anew
+async_reg_ref_impl!(Box);
+async_reg_ref_impl!(Arc);
+async_reg_ref_impl!(Rc);
 
-// pub mod old {
-//     use drax::transport::frame::PacketFrame;
-//     use drax::transport::pipeline::ChainProcessor;
-//     use drax::{
-//         link,
-//         prelude::Key,
-//         transport::{DraxTransport, Result, TransportProcessorContext},
-//         VarInt,
-//     };
-//     use std::marker::PhantomData;
-//     use std::rc::Rc;
-//     use std::{collections::HashMap, future::Future, io::Cursor, ops::RangeInclusive, sync::Arc};
-//     use std::future::IntoFuture;
-//     use std::pin::Pin;
-//     use drax::prelude::BoxFuture;
-//
-//     pub struct AsyncTypeTransport<
-//         Output,
-//         T: DraxTransport,
-//         Func: for<'a> Fn(T, &'a mut TransportProcessorContext) -> BoxFuture<'a, Output>,
-//     > {
-//         pub inner: Func,
-//         pub _phantom_output: PhantomData<Output>,
-//         pub _phantom_t: PhantomData<T>,
-//     }
-//
-//     impl<
-//         Output,
-//         T: DraxTransport,
-//         Func: for<'a> Fn(T, &'a mut TransportProcessorContext) -> BoxFuture<'a, Output>,
-//     > ChainProcessor for AsyncTypeTransport<Output, T, Func>
-//     {
-//         type Input = T;
-//         type Output = Pin<Box<dyn Future<Output=Output>>>;
-//
-//         fn process<'a>(
-//             &'a mut self,
-//             context: &'a mut TransportProcessorContext,
-//             input: Self::Input,
-//         ) -> Result<Self::Output> {
-//             Ok((self.inner)(input, context))
-//         }
-//     }
-//
-//     struct TypeRegistrationCandidate<T: DraxTransport> {
-//         _phantom_marker: PhantomData<T>,
-//     }
-//
-//     impl<T: DraxTransport> ChainProcessor for TypeRegistrationCandidate<T> {
-//         type Input = Cursor<Vec<u8>>;
-//         type Output = T;
-//
-//         fn process<'a>(
-//             &'a mut self,
-//             context: &'a mut TransportProcessorContext,
-//             mut input: Self::Input,
-//         ) -> Result<Self::Output> {
-//             T::read_from_transport(context, &mut input)
-//         }
-//     }
-//
-//     pub struct PacketRegistryProtocol;
-//
-//     impl Key for PacketRegistryProtocol {
-//         type Value = VarInt;
-//     }
-//
-//     pub trait PacketRegistry<Mapping: Clone> {
-//         type ChainOutput;
-//
-//         fn staple(&self) -> VarInt;
-//
-//         fn mappings(&mut self) -> &mut HashMap<(VarInt, VarInt), Mapping>;
-//
-//         fn register_internal<T: RegistrationCandidate>(&mut self, mapping: Mapping) {
-//             let staple = self.staple();
-//             let map = self.mappings();
-//             if staple == ALL_VERSIONS || staple == UNKNOWN_VERSION {
-//                 T::register_all(|key| {
-//                     map.insert(key, mapping.clone());
-//                 });
-//             } else {
-//                 if let Some(packet_id) = T::scoped_registration(staple) {
-//                     map.insert((staple, packet_id), mapping);
-//                 }
-//             }
-//         }
-//
-//         fn execute_simple(
-//             &mut self,
-//             context: &mut TransportProcessorContext,
-//             cursor: Cursor<Vec<u8>>,
-//             mapping: Mapping,
-//         ) -> Result<Self::ChainOutput>;
-//
-//         fn process_chain_internal<'a>(
-//             &'a mut self,
-//             context: &'a mut TransportProcessorContext,
-//             input: PacketFrame,
-//         ) -> Result<Self::ChainOutput> {
-//             let mut cursor = Cursor::new(input.data);
-//             let protocol_version = context
-//                 .retrieve_data::<PacketRegistryProtocol>()
-//                 .map(|x| *x)
-//                 .unwrap_or(UNKNOWN_VERSION);
-//             let packet_id = if self.staple() == ALL_VERSIONS {
-//                 drax::extension::read_var_int_sync(context, &mut cursor)?
-//             } else {
-//                 self.staple()
-//             };
-//             let packet_mappings = self.mappings().get(&(protocol_version, packet_id)).cloned();
-//             match packet_mappings {
-//                 Some(mapping) => self.execute_simple(context, cursor, mapping),
-//                 None => {
-//                     return drax::transport::Error::cause(format!(
-//                         "No packet found with ({}, {})",
-//                         protocol_version, packet_id
-//                     ));
-//                 }
-//             }
-//         }
-//     }
-//
-// // type PacketFunction<Output> =
-// // dyn for<'a> Fn(&'a mut TransportProcessorContext, Cursor<Vec<u8>>) -> Result<Box<Output>>;
-// //
-// // pub struct SyncPacketRegistry<Output> {
-// //     stapled_version: VarInt,
-// //     mappings: HashMap<(VarInt, VarInt), Rc<PacketFunction<Output>>>,
-// // }
-//
-//     macro_rules! reg_funcs {
-//     ($ty:ty) => {
-//         fn staple(&self) -> VarInt {
-//             self.stapled_version
-//         }
-//
-//         fn mappings(&mut self) -> &mut HashMap<(VarInt, VarInt), $ty> {
-//             &mut self.mappings
-//         }
-//
-//         fn execute_simple(
-//             &mut self,
-//             context: &mut TransportProcessorContext,
-//             cursor: Cursor<Vec<u8>>,
-//             mapping: $ty,
-//         ) -> Result<Self::ChainOutput> {
-//             todo!()
-//             // mapping.process(context, cursor)
-//         }
-//     };
-// }
-//
-// // impl<Output> PacketRegistry<Rc<PacketFunction<Output>>> for SyncPacketRegistry<Output> {
-// //     type ChainOutput = Box<Output>;
-// //
-// //     reg_funcs!(Rc<PacketFunction<Output>>);
-// // }
-// //
-// // impl<Output> SyncPacketRegistry<Output> {
-// //     pub fn new(stapled: VarInt) -> Self {
-// //         Self {
-// //             stapled_version: stapled,
-// //             mappings: HashMap::default(),
-// //         }
-// //     }
-// //
-// //     pub fn register<T: RegistrationCandidate + DraxTransport, F: Fn(T) -> Output>(
-// //         &mut self,
-// //         function: F,
-// //     ) {
-// //         self.register_internal::<T>(Rc::new(move |context, mut cursor| {
-// //             let packet = T::read_from_transport(context, &mut cursor)?;
-// //             Ok(Box::new((function)(packet)))
-// //         }));
-// //     }
-// //
-// //     pub fn register_with_context<
-// //         T: RegistrationCandidate + DraxTransport,
-// //         F: for<'a> Fn(T, &'a mut TransportProcessorContext) -> Output,
-// //     >(
-// //         &mut self,
-// //         function: F,
-// //     ) {
-// //         self.register_internal::<T>(Rc::new(move |context, mut cursor| {
-// //             let packet = T::read_from_transport(context, &mut cursor)?;
-// //             Ok(Box::new((function)(packet, context)))
-// //         }));
-// //     }
-// // }
-// //
-// // impl<Output> ChainProcessor for SyncPacketRegistry<Output> {
-// //     type Input = PacketFrame;
-// //     type Output = Box<Output>;
-// //
-// //     fn process<'a>(
-// //         &'a mut self,
-// //         context: &'a mut TransportProcessorContext,
-// //         input: Self::Input,
-// //     ) -> Result<Self::Output> {
-// //         self.process_chain_internal(context, input)
-// //     }
-// // }
-//
-//     pub type AsyncPacketFunction<Output> = dyn for<'a> Fn(Cursor<Vec<u8>>, &'a mut TransportProcessorContext) -> BoxFuture<'a, Output>;
-//
-//     impl<Output> PacketRegistry<Arc<AsyncPacketFunction<Output>>> for AsyncPacketRegistry<Output> {
-//         type ChainOutput = Box<dyn Future<Output=Output>>;
-//
-//         reg_funcs!(Arc<AsyncPacketFunction<Output>>);
-//     }
-//
-//     pub struct AsyncPacketRegistry<Output> {
-//         stapled_version: VarInt,
-//         mappings: HashMap<(VarInt, VarInt), Arc<AsyncPacketFunction<Output>>>,
-//     }
-//
-//     impl<Output: 'static> AsyncPacketRegistry<Output> {
-//         pub fn new(stapled: VarInt) -> Self {
-//             Self {
-//                 stapled_version: stapled,
-//                 mappings: HashMap::default(),
-//             }
-//         }
-//
-//         pub fn register<
-//             T: RegistrationCandidate + DraxTransport,
-//             F: Future<Output=Output>,
-//             F1: Fn(T) -> F,
-//         >(
-//             &mut self,
-//             function: F1,
-//         ) {
-//             todo!()
-//         }
-//
-//         pub fn register_with_context<T: RegistrationCandidate + DraxTransport, F, F1>(
-//             &mut self,
-//             function: F1,
-//         ) where
-//             F1: for<'a> Fn(T, &'a mut TransportProcessorContext) -> BoxFuture<'a, Output>,
-//         {
-//             let type_registrar = TypeRegistrationCandidate::<T> {
-//                 _phantom_marker: Default::default(),
-//             };
-//             let transport = AsyncTypeTransport {
-//                 inner: move |t, ctx| Box::pin((function)(t, ctx)),
-//                 _phantom_output: Default::default(),
-//                 _phantom_t: Default::default(),
-//             };
-//             let transport_link = link!(type_registrar, transport);
-//         }
-//     }
-//
-//     impl<Output> ChainProcessor for AsyncPacketRegistry<Output> {
-//         type Input = PacketFrame;
-//         type Output = Box<dyn Future<Output=Output>>;
-//
-//         fn process<'a>(
-//             &'a mut self,
-//             context: &'a mut TransportProcessorContext,
-//             input: Self::Input,
-//         ) -> Result<Self::Output> {
-//             self.process_chain_internal(context, input)
-//         }
-//     }
-//
-//     pub trait RegistrationCandidate {
-//         fn register_all<F: FnMut((VarInt, VarInt))>(function: F);
-//
-//         fn scoped_registration(protocol_version: VarInt) -> Option<VarInt>;
-//     }
-//
-//     pub struct Importer {
-//         range: RangeInclusive<i32>,
-//         protocol_version: i32,
-//     }
-//
-//     impl Importer {
-//         pub fn consume<F: FnMut((VarInt, VarInt))>(self, function: &mut F) {
-//             let proto = self.protocol_version;
-//             self.range.for_each(|x| (function)((proto, x)));
-//         }
-//     }
-//
-//     impl From<(VarInt, VarInt)> for Importer {
-//         fn from((single, protocol_version): (VarInt, VarInt)) -> Self {
-//             Importer {
-//                 range: single..=single,
-//                 protocol_version,
-//             }
-//         }
-//     }
-//
-//     impl From<(RangeInclusive<VarInt>, VarInt)> for Importer {
-//         fn from((range, protocol_version): (RangeInclusive<VarInt>, VarInt)) -> Self {
-//             Importer {
-//                 range,
-//                 protocol_version,
-//             }
-//         }
-//     }
-//
-//     #[macro_export]
-//     macro_rules! import_registrations {
-//     ($($item:ident {
-//         $($from:tt$(..$to:tt)? -> $id:tt,)*
-//     })*) => {
-//         $(
-//                 impl $crate::registry::RegistrationCandidate for $item {
-//                     fn register_all<F: FnMut((drax::VarInt, drax::VarInt))>(mut function: F) {
-//                         $($crate::registry::Importer::from(($from$(..=$to)?, $id)).consume(&mut function);)*
-//                     }
-//
-//                     fn scoped_registration(protocol_version: drax::VarInt) -> Option<drax::VarInt> {
-//                         match protocol_version {
-//                             $($from$(..=$to)? => Some($id),)*
-//                             _ => None,
-//                         }
-//                     }
-//                 }
-//         )*
-//     };
-// }
-//
-//     #[macro_export]
-//     macro_rules! key_context {
-//     ($ctx:ident) => {
-//         impl drax::prelude::Key for $ctx {
-//             type Value = std::sync::Arc<$ctx>;
-//         }
-//     };
-// }
-// }
+#[macro_export]
+macro_rules! packet {
+    ($handle:expr) => {
+        |t, ctx| Box::pin($handle(t, ctx))
+    };
+}
 
 pub trait RegistrationCandidate {
     fn register_all<F: FnMut((VarInt, VarInt))>(function: F);

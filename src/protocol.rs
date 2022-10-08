@@ -1,3 +1,18 @@
+#[derive(serde_derive::Deserialize, serde_derive::Serialize, Debug, Clone)]
+pub struct GameProfile {
+    pub id: uuid::Uuid,
+    pub name: String,
+    pub properties: Vec<Property>,
+}
+
+#[derive(serde_derive::Deserialize, serde_derive::Serialize, Debug, Clone)]
+pub struct Property {
+    pub name: String,
+    pub value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+}
+
 pub mod handshaking {
     pub mod sb {
         use drax::VarInt;
@@ -234,6 +249,7 @@ pub mod login {
     }
 
     pub mod cb {
+        use crate::protocol::{GameProfile, Property};
         use drax::{Maybe, SizedVec};
 
         #[derive(drax_derive::DraxTransport, Debug)]
@@ -257,12 +273,32 @@ pub mod login {
             pub signature: Maybe<String>,
         }
 
+        impl From<&Property> for LoginProperty {
+            fn from(property: &Property) -> Self {
+                Self {
+                    name: property.name.clone(),
+                    value: property.value.clone(),
+                    signature: property.signature.as_ref().cloned(),
+                }
+            }
+        }
+
         #[derive(drax_derive::DraxTransport, Debug)]
         pub struct LoginSuccess {
             pub uuid: uuid::Uuid,
             #[drax(limit = 16)]
             pub username: String,
             pub properties: SizedVec<LoginProperty>,
+        }
+
+        impl From<&GameProfile> for LoginSuccess {
+            fn from(profile: &GameProfile) -> Self {
+                Self {
+                    uuid: profile.id.clone(),
+                    username: profile.name.clone(),
+                    properties: profile.properties.iter().map(LoginProperty::from).collect(),
+                }
+            }
         }
 
         #[derive(drax_derive::DraxTransport, Debug)]
