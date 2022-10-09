@@ -61,8 +61,12 @@ impl<R: AsyncRead, Context, PacketOutput>
     }
 
     pub fn from_handshake(read: R, handshake: &Handshake) -> Self {
+        Self::from_protocol_version(read, handshake.protocol_version)
+    }
+
+    pub fn from_protocol_version(read: R, protocol_version: VarInt) -> Self {
         let mut context = TransportProcessorContext::new();
-        context.insert_data::<ProtocolVersionKey>(handshake.protocol_version);
+        context.insert_data::<ProtocolVersionKey>(protocol_version);
 
         let pipeline = DraxTransportPipeline::new(
             Box::new(FrameDecoder::new(-1)),
@@ -71,7 +75,7 @@ impl<R: AsyncRead, Context, PacketOutput>
 
         Self {
             read,
-            registry: MappedAsyncPacketRegistry::new(handshake.protocol_version),
+            registry: MappedAsyncPacketRegistry::new(protocol_version),
             processor_context: context,
             drax_transport: pipeline,
             _phantom_context: Default::default(),
@@ -236,8 +240,12 @@ impl<W> MinecraftProtocolWriter<W> {
 
 impl<W: AsyncWrite + Unpin + Sized> MinecraftProtocolWriter<W> {
     pub fn from_handshake(write: W, handshake: &Handshake) -> Self {
+        Self::from_protocol_version(write, handshake.protocol_version)
+    }
+
+    pub fn from_protocol_version(write: W, protocol_version: VarInt) -> Self {
         Self {
-            protocol_version: handshake.protocol_version,
+            protocol_version,
             write,
             write_pipeline: Box::new(link!(
                 MCPacketWriter,
