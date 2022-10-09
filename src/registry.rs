@@ -18,11 +18,11 @@ pub const ALL_VERSIONS: VarInt = -1;
 
 pub struct MCPacketWriter;
 impl ChainProcessor for MCPacketWriter {
-    type Input = (VarInt, Box<dyn DraxTransport>);
+    type Input = (VarInt, Box<dyn DraxTransport + Send + Sync>);
     type Output = PacketFrame;
 
     fn process(
-        &mut self,
+        &self,
         context: &mut TransportProcessorContext,
         (packet_id, transport): Self::Input,
     ) -> Result<Self::Output>
@@ -105,12 +105,12 @@ type AsyncPacketFunction<Context, Output> = dyn (for<'a> Fn(
     + Send
     + Sync;
 
-pub struct MappedAsyncPacketRegistry<Context, Output> {
+pub struct MappedAsyncPacketRegistry<Context: Send + Sync, Output: Send + Sync> {
     staple: VarInt,
     mappings: HashMap<(VarInt, VarInt), Arc<AsyncPacketFunction<Context, Output>>>,
 }
 
-impl<Context, Output> Default for MappedAsyncPacketRegistry<Context, Output> {
+impl<Context: Send + Sync, Output: Send + Sync> Default for MappedAsyncPacketRegistry<Context, Output> {
     fn default() -> Self {
         Self {
             staple: UNKNOWN_VERSION,
@@ -119,7 +119,7 @@ impl<Context, Output> Default for MappedAsyncPacketRegistry<Context, Output> {
     }
 }
 
-impl<Context, Output> MappedAsyncPacketRegistry<Context, Output> {
+impl<Context: Send + Sync, Output: Send + Sync> MappedAsyncPacketRegistry<Context, Output> {
     pub fn new(protocol_version: VarInt) -> Self {
         Self {
             staple: protocol_version,
@@ -128,7 +128,7 @@ impl<Context, Output> MappedAsyncPacketRegistry<Context, Output> {
     }
 }
 
-impl<Context, Output> MutAsyncPacketRegistry<Context, Output>
+impl<Context: Send + Sync, Output: Send + Sync> MutAsyncPacketRegistry<Context, Output>
     for MappedAsyncPacketRegistry<Context, Output>
 {
     fn register<
@@ -159,7 +159,7 @@ impl<Context, Output> MutAsyncPacketRegistry<Context, Output>
     }
 }
 
-impl<Context, Output> AsyncPacketRegistry<Context, Output>
+impl<Context: Send + Sync, Output: Send + Sync> AsyncPacketRegistry<Context, Output>
     for MappedAsyncPacketRegistry<Context, Output>
 {
     fn execute<'a>(
@@ -196,7 +196,7 @@ impl<Context, Output> AsyncPacketRegistry<Context, Output>
 
 macro_rules! async_reg_ref_impl {
     ($wrapper:ident) => {
-        impl<Context, Output> AsyncPacketRegistry<Context, Output>
+        impl<Context: Send + Sync, Output: Send + Sync> AsyncPacketRegistry<Context, Output>
             for $wrapper<MappedAsyncPacketRegistry<Context, Output>>
         {
             fn execute<'a>(

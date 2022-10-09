@@ -27,8 +27,8 @@ pub struct BaseConfiguration {
 }
 
 pub struct ServerLoop<
-    R: AsyncRead + Unpin + Sized,
-    W: AsyncWrite + Unpin + Sized,
+    R: AsyncRead + Unpin + Sized + Send + Sync,
+    W: AsyncWrite + Unpin + Sized + Send + Sync,
     Ctx,
     ClientAcceptor: Fn(Ctx, ClientVer<R, W>) -> BoxFuture<'static, ()>,
     StatusResponder: (Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,
@@ -42,14 +42,17 @@ pub struct ServerLoop<
     phantom_ctx: PhantomData<Ctx>,
 }
 
-pub enum ClientVer<R: AsyncRead + Unpin + Sized, W: AsyncWrite + Unpin + Sized> {
+pub enum ClientVer<
+    R: AsyncRead + Unpin + Sized + Send + Sync,
+    W: AsyncWrite + Unpin + Sized + Send + Sync,
+> {
     Encrypted(AuthenticatedClient<DecryptRead<R>, EncryptedWriter<W>>),
     Plain(AuthenticatedClient<R, W>),
 }
 
 impl<
-        R: AsyncRead + Unpin + Sized + 'static,
-        W: AsyncWrite + Unpin + Sized + 'static,
+        R: AsyncRead + Unpin + Sized + Send + Sync + 'static,
+        W: AsyncWrite + Unpin + Sized + Send + Sync + 'static,
         Ctx: 'static,
         ClientAcceptor: Fn(Ctx, ClientVer<R, W>) -> BoxFuture<'static, ()> + 'static,
         StatusResponder: (for<'a> Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,

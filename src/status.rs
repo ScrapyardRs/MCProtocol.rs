@@ -40,8 +40,8 @@ pub struct StatusBuilder {
 }
 
 pub async fn handle_status_client<
-    R: AsyncRead + Unpin + Sized,
-    W: AsyncWrite + Unpin + Sized,
+    R: AsyncRead + Unpin + Sized + Send + Sync,
+    W: AsyncWrite + Unpin + Sized + Send + Sync,
     Func: (Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,
 >(
     read: R,

@@ -62,7 +62,7 @@ pub enum ValidationError {
     InvalidSharedSecret,
 }
 
-pub enum AuthError<W: AsyncWrite + Unpin + Sized> {
+pub enum AuthError<W: AsyncWrite + Unpin + Sized + Send + Sync> {
     InvalidState(MinecraftProtocolWriter<W>),
     KeyError(MinecraftProtocolWriter<W>, KeyError),
     ValidationError(MinecraftProtocolWriter<W>, ValidationError),
@@ -70,7 +70,7 @@ pub enum AuthError<W: AsyncWrite + Unpin + Sized> {
     RegistryError(MinecraftProtocolWriter<W>, RegistryError),
 }
 
-impl<W: AsyncWrite + Unpin + Sized> Display for AuthError<W> {
+impl<W: AsyncWrite + Unpin + Sized + Send + Sync> Display for AuthError<W> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             AuthError::InvalidState(_) => write!(f, "Invalid authentication state during login."),
@@ -120,13 +120,13 @@ impl<W: AsyncWrite + Unpin + Sized> Display for AuthError<W> {
     }
 }
 
-impl<W: AsyncWrite + Unpin + Sized> Debug for AuthError<W> {
+impl<W: AsyncWrite + Unpin + Sized + Send + Sync> Debug for AuthError<W> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self)
     }
 }
 
-impl<W: AsyncWrite + Unpin + Sized> std::error::Error for AuthError<W> {}
+impl<W: AsyncWrite + Unpin + Sized + Send + Sync> std::error::Error for AuthError<W> {}
 
 enum AuthFunctionResponse {
     InvalidState,
@@ -348,13 +348,13 @@ async fn encryption_response(
     }
 }
 
-pub struct AuthenticatedClient<R: AsyncRead, W: AsyncWrite> {
+pub struct AuthenticatedClient<R: AsyncRead + Send + Sync, W: AsyncWrite + Send + Sync> {
     pub read_write: BlankMcReadWrite<R, W>,
     pub profile: GameProfile,
     pub key: Option<IdentifiedKey>,
 }
 
-pub async fn auth_client<R: AsyncRead + Unpin + Sized, W: AsyncWrite + Unpin + Sized>(
+pub async fn auth_client<R: AsyncRead + Unpin + Sized + Send + Sync, W: AsyncWrite + Unpin + Sized + Send + Sync>(
     read: R,
     write: W,
     handshake: Handshake,

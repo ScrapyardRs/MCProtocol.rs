@@ -11,9 +11,10 @@ use drax::transport::encryption::{DecryptRead, EncryptedWriter, EncryptionStream
 use drax::transport::frame::{FrameDecoder, FrameEncoder, PacketFrame};
 use drax::transport::pipeline::{BoxedChain, ProcessChainLink, ShareChain};
 use drax::transport::{DraxTransport, TransportProcessorContext};
-use drax::{link, VarInt};
+use drax::{link, share_link, VarInt};
 use std::io::Cursor;
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
@@ -21,10 +22,10 @@ pub type BlankAsyncProtocolPipeline<R> =
     AsyncMinecraftProtocolPipeline<R, (), (), MappedAsyncPacketRegistry<(), ()>>;
 
 pub struct AsyncMinecraftProtocolPipeline<
-    R: AsyncRead,
-    Context,
-    PacketOutput,
-    Reg: AsyncPacketRegistry<Context, PacketOutput>,
+    R: AsyncRead + Send + Sync,
+    Context: Send + Sync,
+    PacketOutput: Send + Sync,
+    Reg: AsyncPacketRegistry<Context, PacketOutput> + Send + Sync,
 > {
     read: R,
     registry: Reg,
@@ -34,7 +35,7 @@ pub struct AsyncMinecraftProtocolPipeline<
     _phantom_packet_output: PhantomData<PacketOutput>,
 }
 
-impl<R: AsyncRead, Context, PacketOutput>
+impl<R: AsyncRead + Send + Sync, Context: Send + Sync, PacketOutput: Send + Sync>
     AsyncMinecraftProtocolPipeline<
         R,
         Context,
@@ -85,10 +86,10 @@ impl<R: AsyncRead, Context, PacketOutput>
 }
 
 impl<
-        R: AsyncRead + Unpin + Sized,
-        Context,
-        PacketOutput,
-        Reg: AsyncPacketRegistry<Context, PacketOutput>,
+        R: AsyncRead + Unpin + Sized + Send + Sync,
+        Context: Send + Sync,
+        PacketOutput: Send + Sync,
+        Reg: AsyncPacketRegistry<Context, PacketOutput> + Send + Sync,
     > AsyncMinecraftProtocolPipeline<R, Context, PacketOutput, Reg>
 {
     pub fn enable_decryption(
@@ -148,17 +149,21 @@ impl<
     }
 }
 
-impl<R: AsyncRead, Context, PacketOutput, Reg: AsyncPacketRegistry<Context, PacketOutput>>
-    AsyncMinecraftProtocolPipeline<R, Context, PacketOutput, Reg>
+impl<
+        R: AsyncRead + Send + Sync,
+        Context: Send + Sync,
+        PacketOutput: Send + Sync,
+        Reg: AsyncPacketRegistry<Context, PacketOutput> + Send + Sync,
+    > AsyncMinecraftProtocolPipeline<R, Context, PacketOutput, Reg>
 {
     pub fn into_inner_read(self) -> R {
         self.read
     }
 
     pub fn with_registry<
-        NContext,
-        NPacketOutput,
-        Reg2: AsyncPacketRegistry<NContext, NPacketOutput>,
+        NContext: Send + Sync,
+        NPacketOutput: Send + Sync,
+        Reg2: AsyncPacketRegistry<NContext, NPacketOutput> + Send + Sync,
     >(
         self,
         registry: Reg2,
@@ -206,8 +211,12 @@ impl<R: AsyncRead, Context, PacketOutput, Reg: AsyncPacketRegistry<Context, Pack
     }
 }
 
-impl<R: AsyncRead, Context, PacketOutput, Reg: MutAsyncPacketRegistry<Context, PacketOutput>>
-    AsyncMinecraftProtocolPipeline<R, Context, PacketOutput, Reg>
+impl<
+        R: AsyncRead + Send + Sync,
+        Context: Send + Sync,
+        PacketOutput: Send + Sync,
+        Reg: MutAsyncPacketRegistry<Context, PacketOutput> + Send + Sync,
+    > AsyncMinecraftProtocolPipeline<R, Context, PacketOutput, Reg>
 {
     pub fn register<
         T: DraxTransport + RegistrationCandidate,
@@ -220,16 +229,16 @@ impl<R: AsyncRead, Context, PacketOutput, Reg: MutAsyncPacketRegistry<Context, P
     }
 }
 
-pub struct MinecraftProtocolWriter<W> {
+pub struct MinecraftProtocolWriter<W: Send + Sync> {
     protocol_version: VarInt,
     write: W,
-    write_pipeline: BoxedChain<(VarInt, Box<dyn DraxTransport>), Vec<u8>>,
+    write_pipeline: ShareChain<(VarInt, Box<dyn DraxTransport + Send + Sync>), Vec<u8>>,
 }
 
-impl<W> MinecraftProtocolWriter<W> {
+impl<W: Send + Sync> MinecraftProtocolWriter<W> {
     pub fn enable_compression(&mut self, threshold: isize) {
         if threshold >= 0 {
-            self.write_pipeline = Box::new(link!(
+            self.write_pipeline = Arc::new(share_link!(
                 MCPacketWriter,
                 FrameEncoder::new(threshold),
                 FrameSizeAppender
@@ -238,7 +247,7 @@ impl<W> MinecraftProtocolWriter<W> {
     }
 }
 
-impl<W: AsyncWrite + Unpin + Sized> MinecraftProtocolWriter<W> {
+impl<W: AsyncWrite + Unpin + Sized + Send + Sync> MinecraftProtocolWriter<W> {
     pub fn from_handshake(write: W, handshake: &Handshake) -> Self {
         Self::from_protocol_version(write, handshake.protocol_version)
     }
@@ -247,7 +256,7 @@ impl<W: AsyncWrite + Unpin + Sized> MinecraftProtocolWriter<W> {
         Self {
             protocol_version,
             write,
-            write_pipeline: Box::new(link!(
+            write_pipeline: Arc::new(share_link!(
                 MCPacketWriter,
                 FrameEncoder::new(-1),
                 FrameSizeAppender
@@ -255,7 +264,7 @@ impl<W: AsyncWrite + Unpin + Sized> MinecraftProtocolWriter<W> {
         }
     }
 
-    pub async fn write_packet<T: DraxTransport + RegistrationCandidate + 'static>(
+    pub async fn write_packet<T: DraxTransport + RegistrationCandidate + Send + Sync + 'static>(
         &mut self,
         packet: T,
     ) -> drax::transport::Result<()> {
