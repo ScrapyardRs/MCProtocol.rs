@@ -211,7 +211,7 @@ impl<R: AsyncRead, Context, PacketOutput, Reg: MutAsyncPacketRegistry<Context, P
 {
     pub fn register<
         T: DraxTransport + RegistrationCandidate,
-        Func: (for<'a> Fn(&'a mut Context, T) -> BoxFuture<'a, PacketOutput>) + 'static,
+        Func: (for<'a> Fn(&'a mut Context, T) -> BoxFuture<'a, PacketOutput>) + 'static + Send + Sync,
     >(
         &mut self,
         func: Func,

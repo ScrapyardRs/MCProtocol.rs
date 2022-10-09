@@ -72,7 +72,7 @@ impl Display for RegistryError {
 pub trait MutAsyncPacketRegistry<Context, Output>: AsyncPacketRegistry<Context, Output> {
     fn register<
         T: DraxTransport + RegistrationCandidate,
-        Func: (for<'a> Fn(&'a mut Context, T) -> BoxFuture<'a, Output>) + 'static,
+        Func: (for<'a> Fn(&'a mut Context, T) -> BoxFuture<'a, Output>) + 'static + Send + Sync,
     >(
         &mut self,
         func: Func,
@@ -101,7 +101,9 @@ type AsyncPacketFunction<Context, Output> = dyn (for<'a> Fn(
         &'a mut Context,
         &'a mut TransportProcessorContext,
     ) -> Result<BoxFuture<'a, Output>>)
-    + 'static;
+    + 'static
+    + Send
+    + Sync;
 
 pub struct MappedAsyncPacketRegistry<Context, Output> {
     staple: VarInt,
@@ -131,7 +133,7 @@ impl<Context, Output> MutAsyncPacketRegistry<Context, Output>
 {
     fn register<
         T: DraxTransport + RegistrationCandidate,
-        Func: for<'a> Fn(&'a mut Context, T) -> BoxFuture<'a, Output> + 'static,
+        Func: for<'a> Fn(&'a mut Context, T) -> BoxFuture<'a, Output> + 'static + Send + Sync,
     >(
         &mut self,
         func: Func,
