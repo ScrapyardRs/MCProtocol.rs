@@ -94,6 +94,10 @@ impl RelativeArgument {
     pub const Y_ROT: u8 = Self::get_mask(3);
     pub const X_ROT: u8 = Self::get_mask(4);
 
+    pub fn from_mask(current_mask: u8) -> Self {
+        Self { current_mask }
+    }
+
     const fn get_mask(value: u8) -> u8 {
         1 << value
     }
