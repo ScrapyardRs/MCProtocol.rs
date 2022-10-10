@@ -117,8 +117,8 @@ pub mod cb {
 
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct DeclareCommands {
-        commands: SizedVec<Command>,
-        root_index: VarInt,
+        pub commands: SizedVec<Command>,
+        pub root_index: VarInt,
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
@@ -145,23 +145,23 @@ pub mod cb {
 
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct JoinGame {
-        player_id: i32,
-        hardcore: bool,
-        game_type: GameType,
-        previous_game_type: GameType,
-        levels: SizedVec<String>,
-        codec: CompoundTag,
-        dimension_type: String,
-        dimension: String,
-        seed: u64,
-        max_players: VarInt,
-        chunk_radius: VarInt,
-        simulation_distance: VarInt,
-        reduced_debug_info: bool,
-        show_death_screen: bool,
-        is_debug: bool,
-        is_flat: bool,
-        last_death_location: Maybe<super::BlockPos>,
+        pub player_id: i32,
+        pub hardcore: bool,
+        pub game_type: GameType,
+        pub previous_game_type: GameType,
+        pub levels: SizedVec<String>,
+        pub codec: CompoundTag,
+        pub dimension_type: String,
+        pub dimension: String,
+        pub seed: u64,
+        pub max_players: VarInt,
+        pub chunk_radius: VarInt,
+        pub simulation_distance: VarInt,
+        pub reduced_debug_info: bool,
+        pub show_death_screen: bool,
+        pub is_debug: bool,
+        pub is_flat: bool,
+        pub last_death_location: Maybe<super::BlockPos>,
     }
 
     #[derive(drax_derive::BitMapTransport, Debug)]
@@ -225,13 +225,13 @@ pub mod cb {
 
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct PlayerPosition {
-        y: f64,
-        z: f64,
-        y_rot: f32,
-        x_rot: f32,
-        relative_arguments: super::RelativeArgument,
-        id: VarInt,
-        dismount_vehicle: bool,
+        pub y: f64,
+        pub z: f64,
+        pub y_rot: f32,
+        pub x_rot: f32,
+        pub relative_arguments: super::RelativeArgument,
+        pub id: VarInt,
+        pub dismount_vehicle: bool,
     }
 
     use super::super::CURRENT_VERSION_IMPL;
