@@ -176,7 +176,7 @@ pub mod cb {
     pub struct PlayerAbilities {
         pub player_abilities_map: PlayerAbilitiesBitMap,
         pub flying_speed: f32,
-        pub walking_speed: f32,
+        pub fov_modifier: f32,
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
