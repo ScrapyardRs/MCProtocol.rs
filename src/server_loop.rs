@@ -112,7 +112,7 @@ impl<
                         Err(err) => {
                             log::warn!("Failed to login user for {}", err);
                             let mut error_message = Chat::text("Failed to login: ");
-                            error_message.modify_style(|style| style.color("RED"));
+                            error_message.modify_style(|style| style.color("#FF0000"));
                             error_message.push_extra(Chat::literal(format!("{}", err)));
 
                             (match err {
