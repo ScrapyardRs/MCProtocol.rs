@@ -349,7 +349,7 @@ async fn encryption_response(
 }
 
 pub struct AuthenticatedClient<R: AsyncRead + Send + Sync, W: AsyncWrite + Send + Sync> {
-    pub read_write: BlankMcReadWrite<R, W>,
+    pub read_write: BlankMcReadWrite<DecryptRead<R>, EncryptedWriter<W>>,
     pub profile: GameProfile,
     pub key: Option<IdentifiedKey>,
 }
@@ -359,7 +359,7 @@ pub async fn auth_client<R: AsyncRead + Unpin + Sized + Send + Sync, W: AsyncWri
     write: W,
     handshake: Handshake,
     auth_config: Arc<AuthConfiguration>,
-) -> Result<AuthenticatedClient<DecryptRead<R>, EncryptedWriter<W>>, AuthError<W>> {
+) -> Result<AuthenticatedClient<R, W>, AuthError<W>> {
     let mut auth_pipeline = AsyncMinecraftProtocolPipeline::from_handshake(read, &handshake);
     auth_pipeline.register(pin_fut!(login_start));
     auth_pipeline.register(pin_fut!(encryption_response));

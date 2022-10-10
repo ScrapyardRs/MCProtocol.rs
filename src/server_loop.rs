@@ -27,8 +27,7 @@ pub struct BaseConfiguration {
     auth_url: Option<String>,
 }
 
-pub type ClientAcceptor<R, W, Ctx> =
-    fn(Ctx, AuthenticatedClient<DecryptRead<R>, EncryptedWriter<W>>) -> BoxFuture<'static, ()>;
+pub type ClientAcceptor<R, W, Ctx> = fn(Ctx, AuthenticatedClient<R, W>) -> BoxFuture<'static, ()>;
 pub type StatusResponder = fn(Handshake) -> BoxFuture<'static, StatusBuilder>;
 
 pub struct ServerLoop<
@@ -120,8 +119,7 @@ impl<
                             return Ok(());
                         }
                     };
-                    ((&arc_self.client_acceptor)(ctx, authenticated_client))
-                        .await
+                    ((&arc_self.client_acceptor)(ctx, authenticated_client)).await
                 }
             },
             _ => (),
