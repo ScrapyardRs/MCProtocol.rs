@@ -229,6 +229,7 @@ pub mod cb {
 
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct PlayerPosition {
+        pub x: f64,
         pub y: f64,
         pub z: f64,
         pub y_rot: f32,
