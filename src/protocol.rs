@@ -155,7 +155,7 @@ pub mod login {
         pub fn verify_signature(
             &self,
             verify_against: &MCPublicKey,
-        ) -> std::result::Result<(), crate::crypto::CapturedRsaError> {
+        ) -> Result<(), crate::crypto::CapturedRsaError> {
             let encoded_pem = crate::crypto::encode_key_pem(self.timestamp, &self.public_key)
                 .map_err(crate::crypto::CapturedRsaError::SpecificationError)?;
             crate::crypto::verify_signature(
@@ -174,7 +174,7 @@ pub mod login {
     }
 
     impl IdentifiedKey {
-        pub fn new(key: &[u8]) -> std::result::Result<Self, crate::crypto::CapturedRsaError> {
+        pub fn new(key: &[u8]) -> Result<Self, crate::crypto::CapturedRsaError> {
             Ok(Self {
                 public_key: key_from_der(key)?,
             })

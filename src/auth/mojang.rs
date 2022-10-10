@@ -171,6 +171,8 @@ async fn login_start(
             let mut verify_data =
                 Cursor::new(Vec::<u8>::with_capacity(sig_data.public_key.len() + 24));
 
+            log::trace!("Verify Length: {}", sig_data.public_key.len() + 24);
+
             let mut ctx = TransportProcessorContext::new();
             macro_rules! catch_drax {
                 ($($tt:tt)*) => {
@@ -179,7 +181,7 @@ async fn login_start(
                         Err(err) => return AuthFunctionResponse::TransportError(err),
                     }
                 }
-            };
+            }
             catch_drax!(sig_holder.write_to_transport(&mut ctx, &mut verify_data));
             catch_drax!(sig_data
                 .timestamp
@@ -191,7 +193,11 @@ async fn login_start(
             }
 
             let key_verify_inner = verify_data.into_inner();
-            log::trace!("Verifying signature...");
+            log::trace!(
+                "Verifying signature: (len: {}) {:?}",
+                key_verify_inner.len(),
+                key_verify_inner
+            );
             if let Err(err) = crate::crypto::verify_signature(
                 Some(crate::crypto::SHA1_HASH),
                 &mojang_der,
