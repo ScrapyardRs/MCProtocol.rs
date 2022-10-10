@@ -115,21 +115,21 @@ pub mod cb {
 
     use crate::{chat::Chat, commands::Command, protocol::GameProfile};
 
-    #[derive(drax_derive::DraxTransport)]
+    #[derive(drax_derive::DraxTransport, Debug)]
     pub struct DeclareCommands {
         commands: SizedVec<Command>,
         root_index: VarInt,
     }
 
-    #[derive(drax_derive::DraxTransport)]
+    #[derive(drax_derive::DraxTransport, Debug)]
     pub struct Disconnect {
         #[drax(json = 32767)]
         pub reason: Chat,
     }
 
-    #[derive(drax_derive::DraxTransport)]
+    #[derive(drax_derive::DraxTransport, Debug)]
     pub struct KeepAlive {
-        pub id: VarInt,
+        pub id: u64,
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
@@ -143,7 +143,7 @@ pub mod cb {
         None,
     }
 
-    #[derive(drax_derive::DraxTransport)]
+    #[derive(drax_derive::DraxTransport, Debug)]
     pub struct JoinGame {
         player_id: i32,
         hardcore: bool,
@@ -164,7 +164,7 @@ pub mod cb {
         last_death_location: Maybe<super::BlockPos>,
     }
 
-    #[derive(drax_derive::BitMapTransport)]
+    #[derive(drax_derive::BitMapTransport, Debug)]
     pub struct PlayerAbilitiesBitMap {
         pub invulnerable: bool,
         pub flying: bool,
@@ -172,6 +172,7 @@ pub mod cb {
         pub instant_build: bool,
     }
 
+    #[derive(drax_derive::DraxTransport, Debug)]
     pub struct PlayerAbilities {
         pub player_abilities_map: PlayerAbilitiesBitMap,
         pub flying_speed: f32,
@@ -222,7 +223,7 @@ pub mod cb {
         RemovePlayer(SizedVec<RemovePlayerEntry>),
     }
 
-    #[derive(drax_derive::DraxTransport)]
+    #[derive(drax_derive::DraxTransport, Debug)]
     pub struct PlayerPosition {
         y: f64,
         z: f64,
@@ -242,6 +243,10 @@ pub mod cb {
 
         Disconnect {
             CURRENT_VERSION_IMPL -> 0x19,
+        }
+
+        KeepAlive {
+            CURRENT_VERSION_IMPL -> 0x20,
         }
 
         JoinGame {
