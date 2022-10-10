@@ -9,7 +9,7 @@ use drax::transport::buffered_reader::DraxTransportPipeline;
 use drax::transport::buffered_writer::FrameSizeAppender;
 use drax::transport::encryption::{DecryptRead, EncryptedWriter, EncryptionStream};
 use drax::transport::frame::{FrameDecoder, FrameEncoder, PacketFrame};
-use drax::transport::pipeline::{BoxedChain, ProcessChainLink, ShareChain};
+use drax::transport::pipeline::{BoxedChain, ChainProcessor, ProcessChainLink, ShareChain};
 use drax::transport::{DraxTransport, TransportProcessorContext};
 use drax::{link, share_link, VarInt};
 use std::io::Cursor;
@@ -232,7 +232,7 @@ impl<
 pub struct MinecraftProtocolWriter<W: Send + Sync> {
     protocol_version: VarInt,
     write: W,
-    write_pipeline: ShareChain<(VarInt, Box<dyn DraxTransport + Send + Sync>), Vec<u8>>,
+    write_pipeline: ShareChain<PacketFrame, Vec<u8>>,
 }
 
 impl<W: Send + Sync> MinecraftProtocolWriter<W> {
@@ -242,11 +242,8 @@ impl<W: Send + Sync> MinecraftProtocolWriter<W> {
 
     pub fn enable_compression(&mut self, threshold: isize) {
         if threshold >= 0 {
-            self.write_pipeline = Arc::new(share_link!(
-                MCPacketWriter,
-                FrameEncoder::new(threshold),
-                FrameSizeAppender
-            ));
+            self.write_pipeline =
+                Arc::new(share_link!(FrameEncoder::new(threshold), FrameSizeAppender));
         }
     }
 }
@@ -260,32 +257,49 @@ impl<W: AsyncWrite + Unpin + Sized + Send + Sync> MinecraftProtocolWriter<W> {
         Self {
             protocol_version,
             write,
-            write_pipeline: Arc::new(share_link!(
-                MCPacketWriter,
-                FrameEncoder::new(-1),
-                FrameSizeAppender
-            )),
+            write_pipeline: Arc::new(share_link!(FrameEncoder::new(-1), FrameSizeAppender)),
         }
+    }
+
+    pub fn buffer_packet<T: DraxTransport + RegistrationCandidate + Send + Sync + 'static>(
+        packet: T,
+        protocol_version: VarInt,
+    ) -> drax::transport::Result<PacketFrame> {
+        let packet_id = match T::scoped_registration(protocol_version) {
+            None => {
+                return drax::transport::Error::cause(format!(
+                "Packet ID not found for protocol version {}. No further information available.",
+                protocol_version
+            ))
+            }
+            Some(packet_id) => packet_id,
+        };
+        let mut context = TransportProcessorContext::new();
+        context.insert_data::<ProtocolVersionKey>(protocol_version);
+        let frame = MCPacketWriter.process(&mut context, (packet_id, Box::new(packet)))?;
+        Ok(frame)
     }
 
     pub async fn write_packet<T: DraxTransport + RegistrationCandidate + Send + Sync + 'static>(
         &mut self,
         packet: T,
     ) -> drax::transport::Result<()> {
-        let packet_id = match T::scoped_registration(self.protocol_version) {
-            None => {
-                return drax::transport::Error::cause(format!(
-                "Packet ID not found for protocol version {}. No further information available.",
-                self.protocol_version
-            ))
-            }
-            Some(packet_id) => packet_id,
-        };
+        let protocol_version = self.protocol_version;
         let mut context = TransportProcessorContext::new();
-        context.insert_data::<ProtocolVersionKey>(self.protocol_version);
-        let packet_buffer = self
-            .write_pipeline
-            .process(&mut context, (packet_id, Box::new(packet)))?;
+        context.insert_data::<ProtocolVersionKey>(protocol_version);
+        let packet_buffer = Self::buffer_packet(packet, protocol_version)?;
+        let packet_buffer = self.write_pipeline.process(&mut context, packet_buffer)?;
+        self.write
+            .write_all(&packet_buffer)
+            .await
+            .map_err(drax::transport::Error::TokioError)
+    }
+
+    pub async fn write_buffered_packet(
+        &mut self,
+        packet: PacketFrame,
+    ) -> drax::transport::Result<()> {
+        let packet_buffer = self.buffer_packet(packet)?;
         self.write
             .write_all(&packet_buffer)
             .await
