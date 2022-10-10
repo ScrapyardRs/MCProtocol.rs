@@ -31,7 +31,11 @@ pub struct ServerLoop<
     R: AsyncRead + Unpin + Sized + Send + Sync,
     W: AsyncWrite + Unpin + Sized + Send + Sync,
     Ctx,
-    ClientAcceptor: (Fn(Ctx, AuthenticatedClient<R, W>) -> BoxFuture<'static, ()>) + 'static,
+    ClientAcceptor: (Fn(
+            Ctx,
+            AuthenticatedClient<R, W>,
+        ) -> BoxFuture<'static, std::result::Result<(), RegistryError>>)
+        + 'static,
     StatusResponder: (Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,
 > {
     auth_config: Arc<AuthConfiguration>,
@@ -47,7 +51,11 @@ impl<
         R: AsyncRead + Unpin + Sized + Send + Sync + 'static,
         W: AsyncWrite + Unpin + Sized + Send + Sync + 'static,
         Ctx: 'static,
-        ClientAcceptor: (Fn(Ctx, AuthenticatedClient<R, W>) -> BoxFuture<'static, ()>) + 'static,
+        ClientAcceptor: (Fn(
+                Ctx,
+                AuthenticatedClient<R, W>,
+            ) -> BoxFuture<'static, std::result::Result<(), RegistryError>>)
+            + 'static,
         StatusResponder: (Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,
     > ServerLoop<R, W, Ctx, ClientAcceptor, StatusResponder>
 {
@@ -97,6 +105,7 @@ impl<
                     arc_self.status_responder.clone(),
                 )
                 .await?;
+                Ok(())
             }
             NextState::Login => match arc_self.auth_option {
                 IncomingAuthenticationOption::MOJANG => {
@@ -135,8 +144,7 @@ impl<
                     ((&arc_self.client_acceptor)(ctx, authenticated_client)).await
                 }
             },
-            _ => (),
+            _ => Ok(()),
         }
-        Ok(())
     }
 }

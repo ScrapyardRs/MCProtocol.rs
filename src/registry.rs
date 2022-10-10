@@ -255,10 +255,7 @@ impl From<(VarInt, VarInt)> for Importer {
 
 impl From<(RangeInclusive<VarInt>, VarInt)> for Importer {
     fn from((range, packet_id): (RangeInclusive<VarInt>, VarInt)) -> Self {
-        Importer {
-            range,
-            packet_id,
-        }
+        Importer { range, packet_id }
     }
 }
 
