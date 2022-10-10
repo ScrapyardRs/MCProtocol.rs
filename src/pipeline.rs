@@ -44,7 +44,7 @@ impl<R: AsyncRead + Send + Sync, Context: Send + Sync, PacketOutput: Send + Sync
     >
 {
     pub fn empty(read: R) -> Self {
-        let mut context = TransportProcessorContext::new();
+        let context = TransportProcessorContext::new();
 
         let pipeline = DraxTransportPipeline::new(
             Arc::new(FrameDecoder::new(-1)),
@@ -194,6 +194,20 @@ impl<
             self.processor_context
                 .insert_data::<ProtocolVersionKey>(protocol)
         }
+    }
+
+    pub fn retrieve_data<T: crate::prelude::Key>(&self) -> Option<&T::Value>
+    where
+        T::Value: Send,
+    {
+        self.processor_context.retrieve_data::<T>()
+    }
+
+    pub fn retrieve_data_mut<T: crate::prelude::Key>(&mut self) -> Option<&mut T::Value>
+        where
+            T::Value: Send,
+    {
+        self.processor_context.retrieve_data_mut::<T>()
     }
 
     pub fn insert_data<K: crate::prelude::Key>(&mut self, value: K::Value)
