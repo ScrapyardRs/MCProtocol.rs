@@ -366,6 +366,7 @@ pub async fn auth_client<
     handshake: Handshake,
     auth_config: Arc<AuthConfiguration>,
 ) -> Result<AuthenticatedClient<R, W>, AuthError<W>> {
+    log::trace!("Authenticating client with mojang.");
     let mut auth_pipeline = AsyncMinecraftProtocolPipeline::from_handshake(read, &handshake);
     auth_pipeline.register(pin_fut!(login_start));
     auth_pipeline.register(pin_fut!(encryption_response));
@@ -382,6 +383,8 @@ pub async fn auth_client<
         Ok(matched) => matched,
         Err(err) => return Err(AuthError::RegistryError(packet_writer, err)),
     };
+
+    log::trace!("Executed next packet successfully.");
 
     let (name, expected_uuid) = match matched {
         AuthFunctionResponse::LoginStartPass {
