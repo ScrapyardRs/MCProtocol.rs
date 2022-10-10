@@ -27,29 +27,33 @@ pub struct BaseConfiguration {
     pub auth_url: Option<String>,
 }
 
-pub type ClientAcceptor<R, W, Ctx> = fn(Ctx, AuthenticatedClient<R, W>) -> BoxFuture<'static, ()>;
-pub type StatusResponder = fn(Handshake) -> BoxFuture<'static, StatusBuilder>;
-
 pub struct ServerLoop<
     R: AsyncRead + Unpin + Sized + Send + Sync,
     W: AsyncWrite + Unpin + Sized + Send + Sync,
     Ctx,
+    ClientAcceptor: (Fn(Ctx, AuthenticatedClient<R, W>) -> BoxFuture<'static, ()>) + 'static,
+    StatusResponder: (Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,
 > {
     auth_config: Arc<AuthConfiguration>,
     auth_option: IncomingAuthenticationOption,
-    client_acceptor: ClientAcceptor<R, W, Ctx>,
+    client_acceptor: ClientAcceptor,
     status_responder: Arc<StatusResponder>,
+    _phantom_ctx: PhantomData<Ctx>,
+    _phantom_r: PhantomData<R>,
+    _phantom_w: PhantomData<W>,
 }
 
 impl<
         R: AsyncRead + Unpin + Sized + Send + Sync + 'static,
         W: AsyncWrite + Unpin + Sized + Send + Sync + 'static,
         Ctx: 'static,
-    > ServerLoop<R, W, Ctx>
+        ClientAcceptor: (Fn(Ctx, AuthenticatedClient<R, W>) -> BoxFuture<'static, ()>) + 'static,
+        StatusResponder: (Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,
+    > ServerLoop<R, W, Ctx, ClientAcceptor, StatusResponder>
 {
     pub fn new(
         config: BaseConfiguration,
-        client_acceptor: ClientAcceptor<R, W, Ctx>,
+        client_acceptor: ClientAcceptor,
         status_responder: StatusResponder,
     ) -> Self {
         Self {
@@ -62,6 +66,9 @@ impl<
             auth_option: config.auth_option,
             client_acceptor,
             status_responder: Arc::new(status_responder),
+            _phantom_ctx: Default::default(),
+            _phantom_r: Default::default(),
+            _phantom_w: Default::default(),
         }
     }
 
