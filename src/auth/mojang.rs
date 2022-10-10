@@ -79,8 +79,10 @@ impl<W: AsyncWrite + Unpin + Sized + Send + Sync> Display for AuthError<W> {
                 KeyError::NoHolder => write!(f, "No holder for player key found."),
                 KeyError::NoKey => write!(f, "No key when expected."),
                 KeyError::MojangKeyServerError => write!(f, "Mojang key failed to parse."),
-                KeyError::InvalidKey(_) => write!(f, "Player key invalid."),
-                KeyError::InvalidIdentifiedKey(_) => write!(f, "Player key improperly formatted."),
+                KeyError::InvalidKey(err) => write!(f, "Player key invalid.\n{}", err),
+                KeyError::InvalidIdentifiedKey(err) => {
+                    write!(f, "Player key improperly formatted.\n{}", err)
+                }
             },
             AuthError::ValidationError(_, validation_err) => match validation_err {
                 ValidationError::VerifyMismatch => write!(f, "Encryption verification mismatch."),
@@ -101,8 +103,8 @@ impl<W: AsyncWrite + Unpin + Sized + Send + Sync> Display for AuthError<W> {
                     )
                 }
             },
-            AuthError::TransportError(_, _) => {
-                write!(f, "Generic transport error.")
+            AuthError::TransportError(_, err) => {
+                write!(f, "Generic transport error.\n{}", err)
             }
             AuthError::RegistryError(_, registry_error) => match registry_error {
                 RegistryError::NoHandlerFound((protocol_version, packet_id), _) => {
@@ -112,8 +114,8 @@ impl<W: AsyncWrite + Unpin + Sized + Send + Sync> Display for AuthError<W> {
                         protocol_version, packet_id
                     )
                 }
-                RegistryError::DraxTransportError(_) => {
-                    write!(f, "Generic transport error.")
+                RegistryError::DraxTransportError(err) => {
+                    write!(f, "Generic transport error.\n{}", err)
                 }
             },
         }
