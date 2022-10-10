@@ -9,6 +9,7 @@ use crate::registry::{MappedAsyncPacketRegistry, RegistryError};
 use crate::status::StatusBuilder;
 use drax::prelude::BoxFuture;
 use drax::transport::encryption::{DecryptRead, EncryptedWriter};
+use std::future::Future;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -26,41 +27,30 @@ pub struct BaseConfiguration {
     auth_url: Option<String>,
 }
 
+pub type ClientAcceptor<R, W, Ctx> =
+    fn(Ctx, AuthenticatedClient<DecryptRead<R>, EncryptedWriter<W>>) -> BoxFuture<'static, ()>;
+pub type StatusResponder = fn(Handshake) -> BoxFuture<'static, StatusBuilder>;
+
 pub struct ServerLoop<
     R: AsyncRead + Unpin + Sized + Send + Sync,
     W: AsyncWrite + Unpin + Sized + Send + Sync,
     Ctx,
-    ClientAcceptor: Fn(Ctx, ClientVer<R, W>) -> BoxFuture<'static, ()>,
-    StatusResponder: (Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,
 > {
     auth_config: Arc<AuthConfiguration>,
     auth_option: IncomingAuthenticationOption,
-    client_acceptor: ClientAcceptor,
+    client_acceptor: ClientAcceptor<R, W, Ctx>,
     status_responder: Arc<StatusResponder>,
-    phantom_r: PhantomData<R>,
-    phantom_w: PhantomData<W>,
-    phantom_ctx: PhantomData<Ctx>,
-}
-
-pub enum ClientVer<
-    R: AsyncRead + Unpin + Sized + Send + Sync,
-    W: AsyncWrite + Unpin + Sized + Send + Sync,
-> {
-    Encrypted(AuthenticatedClient<DecryptRead<R>, EncryptedWriter<W>>),
-    Plain(AuthenticatedClient<R, W>),
 }
 
 impl<
         R: AsyncRead + Unpin + Sized + Send + Sync + 'static,
         W: AsyncWrite + Unpin + Sized + Send + Sync + 'static,
         Ctx: 'static,
-        ClientAcceptor: Fn(Ctx, ClientVer<R, W>) -> BoxFuture<'static, ()> + 'static,
-        StatusResponder: (for<'a> Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,
-    > ServerLoop<R, W, Ctx, ClientAcceptor, StatusResponder>
+    > ServerLoop<R, W, Ctx>
 {
     pub fn new(
         config: BaseConfiguration,
-        client_acceptor: ClientAcceptor,
+        client_acceptor: ClientAcceptor<R, W, Ctx>,
         status_responder: StatusResponder,
     ) -> Self {
         Self {
@@ -73,9 +63,6 @@ impl<
             auth_option: config.auth_option,
             client_acceptor,
             status_responder: Arc::new(status_responder),
-            phantom_r: Default::default(),
-            phantom_w: Default::default(),
-            phantom_ctx: Default::default(),
         }
     }
 
@@ -133,7 +120,7 @@ impl<
                             return Ok(());
                         }
                     };
-                    ((&arc_self.client_acceptor)(ctx, ClientVer::Encrypted(authenticated_client)))
+                    ((&arc_self.client_acceptor)(ctx, authenticated_client))
                         .await
                 }
             },
