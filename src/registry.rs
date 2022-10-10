@@ -110,7 +110,9 @@ pub struct MappedAsyncPacketRegistry<Context: Send + Sync, Output: Send + Sync> 
     mappings: HashMap<(VarInt, VarInt), Arc<AsyncPacketFunction<Context, Output>>>,
 }
 
-impl<Context: Send + Sync, Output: Send + Sync> Default for MappedAsyncPacketRegistry<Context, Output> {
+impl<Context: Send + Sync, Output: Send + Sync> Default
+    for MappedAsyncPacketRegistry<Context, Output>
+{
     fn default() -> Self {
         Self {
             staple: UNKNOWN_VERSION,
@@ -148,11 +150,14 @@ impl<Context: Send + Sync, Output: Send + Sync> MutAsyncPacketRegistry<Context, 
             },
         ));
         if self.staple == ALL_VERSIONS || self.staple == UNKNOWN_VERSION {
+            log::trace!("Using all version schematic for registration.");
             T::register_all(|key| {
+                log::trace!("Registering {:?}", key);
                 self.mappings.insert(key, wrapped.clone());
             });
         } else {
             if let Some(packet_id) = T::scoped_registration(self.staple) {
+                log::trace!("Registering {:?}", (self.staple, packet_id));
                 self.mappings.insert((self.staple, packet_id), wrapped);
             }
         }

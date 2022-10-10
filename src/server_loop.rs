@@ -82,7 +82,10 @@ impl<
         read: R,
         write: W,
     ) -> Result<(), RegistryError> {
+        log::trace!("Accepting new client.");
+
         let mut handshake_pipeline = AsyncMinecraftProtocolPipeline::empty(read);
+        log::trace!("Registering handshake.");
         handshake_pipeline.register(pin_fut!(Self::handle_handshake));
         let handshake: Handshake = handshake_pipeline.execute_next_packet(&mut ()).await?;
         match handshake.next_state {
