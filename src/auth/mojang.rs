@@ -186,7 +186,7 @@ async fn login_start(
             catch_drax!(sig_data
                 .timestamp
                 .write_to_transport(&mut ctx, &mut verify_data));
-            if let Err(err) = verify_data.write_all(&sig_data.signature) {
+            if let Err(err) = verify_data.write_all(&sig_data.public_key) {
                 return AuthFunctionResponse::TransportError(drax::transport::Error::TokioError(
                     err,
                 ));
