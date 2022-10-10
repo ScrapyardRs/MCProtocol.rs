@@ -189,14 +189,18 @@ async fn login_start(
             }
 
             let key_verify_inner = verify_data.into_inner();
+            log::trace!("Verifying signature...");
             if let Err(err) = crate::crypto::verify_signature(
                 Some(crate::crypto::SHA1_HASH),
                 &mojang_der,
                 &sig_data.signature,
                 sha1_message(&key_verify_inner).as_slice(),
             ) {
+                log::trace!("Invalid key!");
                 return AuthFunctionResponse::KeyError(KeyError::InvalidKey(err));
             }
+
+            log::trace!("Building identified key.");
 
             match IdentifiedKey::new(&sig_data.public_key) {
                 Ok(identified_key) => Some(identified_key),
