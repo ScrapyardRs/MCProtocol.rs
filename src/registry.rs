@@ -235,30 +235,29 @@ pub trait RegistrationCandidate {
 
 pub struct Importer {
     range: RangeInclusive<i32>,
-    protocol_version: i32,
+    packet_id: i32,
 }
 
 impl Importer {
     pub fn consume<F: FnMut((VarInt, VarInt))>(self, function: &mut F) {
-        let proto = self.protocol_version;
-        self.range.for_each(|x| (function)((proto, x)));
+        self.range.for_each(|x| (function)((x, self.packet_id)));
     }
 }
 
 impl From<(VarInt, VarInt)> for Importer {
-    fn from((single, protocol_version): (VarInt, VarInt)) -> Self {
+    fn from((single, packet_id): (VarInt, VarInt)) -> Self {
         Importer {
             range: single..=single,
-            protocol_version,
+            packet_id,
         }
     }
 }
 
 impl From<(RangeInclusive<VarInt>, VarInt)> for Importer {
-    fn from((range, protocol_version): (RangeInclusive<VarInt>, VarInt)) -> Self {
+    fn from((range, packet_id): (RangeInclusive<VarInt>, VarInt)) -> Self {
         Importer {
             range,
-            protocol_version,
+            packet_id,
         }
     }
 }
