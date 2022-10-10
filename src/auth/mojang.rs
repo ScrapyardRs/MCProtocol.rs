@@ -150,7 +150,7 @@ async fn login_start(
     context: &mut AuthClientContext,
     login_start: LoginStart,
 ) -> AuthFunctionResponse {
-    log::trace!("Got login start: {}", login_start);
+    log::trace!("Got login start: {:?}", login_start);
 
     if !matches!(context.state, AuthClientState::ExpectingLoginStart) {
         return AuthFunctionResponse::InvalidState;
