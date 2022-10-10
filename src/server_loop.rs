@@ -21,10 +21,10 @@ pub enum IncomingAuthenticationOption {
 
 #[derive(serde_derive::Deserialize)]
 pub struct BaseConfiguration {
-    auth_option: IncomingAuthenticationOption,
-    compression_threshold: isize,
-    force_key_authentication: bool,
-    auth_url: Option<String>,
+    pub auth_option: IncomingAuthenticationOption,
+    pub compression_threshold: isize,
+    pub force_key_authentication: bool,
+    pub auth_url: Option<String>,
 }
 
 pub type ClientAcceptor<R, W, Ctx> = fn(Ctx, AuthenticatedClient<R, W>) -> BoxFuture<'static, ()>;
