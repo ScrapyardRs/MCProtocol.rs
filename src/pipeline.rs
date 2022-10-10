@@ -236,6 +236,10 @@ pub struct MinecraftProtocolWriter<W: Send + Sync> {
 }
 
 impl<W: Send + Sync> MinecraftProtocolWriter<W> {
+    pub fn update_protocol(&mut self, protocol: VarInt) {
+        self.protocol_version = protocol;
+    }
+
     pub fn enable_compression(&mut self, threshold: isize) {
         if threshold >= 0 {
             self.write_pipeline = Arc::new(share_link!(
