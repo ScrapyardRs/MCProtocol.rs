@@ -299,7 +299,9 @@ impl<W: AsyncWrite + Unpin + Sized + Send + Sync> MinecraftProtocolWriter<W> {
         &mut self,
         packet: PacketFrame,
     ) -> drax::transport::Result<()> {
-        let packet_buffer = self.buffer_packet(packet)?;
+        let mut context = TransportProcessorContext::new();
+        context.insert_data::<ProtocolVersionKey>(self.protocol_version);
+        let packet_buffer = self.write_pipeline.process(&mut context, packet)?;
         self.write
             .write_all(&packet_buffer)
             .await
