@@ -111,13 +111,25 @@ pub mod sb {}
 
 pub mod cb {
     use drax::{nbt::CompoundTag, Maybe, SizedVec, VarInt};
+    use uuid::Uuid;
 
-    use crate::chat::Chat;
+    use crate::{chat::Chat, commands::Command, protocol::GameProfile};
+
+    #[derive(drax_derive::DraxTransport)]
+    pub struct DeclareCommands {
+        commands: SizedVec<Command>,
+        root_index: VarInt,
+    }
 
     #[derive(drax_derive::DraxTransport)]
     pub struct Disconnect {
         #[drax(json = 32767)]
         pub reason: Chat,
+    }
+
+    #[derive(drax_derive::DraxTransport)]
+    pub struct KeepAlive {
+        pub id: VarInt,
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
@@ -166,6 +178,50 @@ pub mod cb {
         pub walking_speed: f32,
     }
 
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct AddPlayerEntry {
+        pub profile: GameProfile,
+        pub game_type: GameType,
+        pub latency: VarInt,
+        #[drax(json = 262144)]
+        pub display_name: Maybe<Chat>,
+        pub key_data: Maybe<crate::protocol::login::MojangIdentifiedKey>,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct UpdateGameModeEntry {
+        pub uuid: Uuid,
+        pub game_type: GameType,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct UpdateLatencyEntry {
+        pub uuid: Uuid,
+        pub latency: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct UpdateDisplayNameEntry {
+        pub uuid: Uuid,
+        #[drax(json = 32767)]
+        pub display_name: Maybe<Chat>,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct RemovePlayerEntry {
+        pub uuid: Uuid,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    #[drax(key = {match VarInt})]
+    pub enum PlayerInfo {
+        AddPlayer(SizedVec<AddPlayerEntry>),
+        UpdateGameMode(SizedVec<UpdateGameModeEntry>),
+        UpdateLatency(SizedVec<UpdateLatencyEntry>),
+        UpdateDisplayName(SizedVec<UpdateDisplayNameEntry>),
+        RemovePlayer(SizedVec<RemovePlayerEntry>),
+    }
+
     #[derive(drax_derive::DraxTransport)]
     pub struct PlayerPosition {
         y: f64,
@@ -177,21 +233,31 @@ pub mod cb {
         dismount_vehicle: bool,
     }
 
+    use super::super::CURRENT_VERSION_IMPL;
+
     crate::import_registrations! {
+        DeclareCommands {
+            CURRENT_VERSION_IMPL -> 0xF,
+        }
+
         Disconnect {
-            760 -> 0x19,
+            CURRENT_VERSION_IMPL -> 0x19,
         }
 
         JoinGame {
-            760 -> 0x25,
+            CURRENT_VERSION_IMPL -> 0x25,
         }
 
         PlayerAbilities {
-            760 -> 0x31,
+            CURRENT_VERSION_IMPL -> 0x31,
+        }
+
+        PlayerInfo {
+            CURRENT_VERSION_IMPL -> 0x37,
         }
 
         PlayerPosition {
-            760 -> 0x39,
+            CURRENT_VERSION_IMPL -> 0x39,
         }
     }
 }

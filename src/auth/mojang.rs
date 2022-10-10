@@ -136,6 +136,7 @@ enum AuthFunctionResponse {
     ValidationError(ValidationError),
     TransportError(drax::transport::Error),
     LoginStartPass {
+        mojang_key: Option<MojangIdentifiedKey>,
         key: Option<IdentifiedKey>,
         name: String,
         expected_uuid: Option<Uuid>,
@@ -229,6 +230,7 @@ async fn login_start(
     };
 
     AuthFunctionResponse::LoginStartPass {
+        mojang_key: login_start.sig_data,
         key,
         name: login_start.name.clone(),
         expected_uuid: login_start.sig_holder.as_ref().cloned(),
@@ -369,6 +371,7 @@ pub struct AuthenticatedClient<
     pub read_write: BlankMcReadWrite<DecryptRead<R>, EncryptedWriter<W>>,
     pub profile: GameProfile,
     pub key: Option<IdentifiedKey>,
+    pub mojang_key: Option<MojangIdentifiedKey>,
 }
 
 pub async fn auth_client<
@@ -400,14 +403,15 @@ pub async fn auth_client<
 
     log::trace!("Executed next packet successfully.");
 
-    let (name, expected_uuid) = match matched {
+    let (name, expected_uuid, mojang_key) = match matched {
         AuthFunctionResponse::LoginStartPass {
+            mojang_key,
             key,
             name,
             expected_uuid,
         } => {
             context.key = key;
-            (name, expected_uuid)
+            (name, expected_uuid, mojang_key)
         }
         AuthFunctionResponse::ValidationError(err) => {
             return Err(AuthError::ValidationError(packet_writer, err))
@@ -511,5 +515,6 @@ pub async fn auth_client<
         ),
         profile,
         key: context.key,
+        mojang_key,
     })
 }

@@ -1,16 +1,24 @@
-#[derive(serde_derive::Deserialize, serde_derive::Serialize, Debug, Clone)]
+use drax::{Maybe, SizedVec, VarInt};
+
+pub const CURRENT_VERSION_IMPL: VarInt = 760;
+
+#[derive(
+    drax_derive::DraxTransport, serde_derive::Deserialize, serde_derive::Serialize, Debug, Clone,
+)]
 pub struct GameProfile {
     pub id: uuid::Uuid,
     pub name: String,
-    pub properties: Vec<Property>,
+    pub properties: SizedVec<Property>,
 }
 
-#[derive(serde_derive::Deserialize, serde_derive::Serialize, Debug, Clone)]
+#[derive(
+    drax_derive::DraxTransport, serde_derive::Deserialize, serde_derive::Serialize, Debug, Clone,
+)]
 pub struct Property {
     pub name: String,
     pub value: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub signature: Option<String>,
+    pub signature: Maybe<String>,
 }
 
 pub mod handshaking {
@@ -66,12 +74,14 @@ pub mod status {
             }
         }
 
+        use super::super::CURRENT_VERSION_IMPL;
+
         crate::import_registrations! {
             Request {
-                760 -> 0x00,
+                CURRENT_VERSION_IMPL -> 0x00,
             }
             Ping {
-                760 -> 0x01,
+                CURRENT_VERSION_IMPL -> 0x01,
             }
         }
     }
@@ -123,12 +133,14 @@ pub mod status {
             }
         }
 
+        use super::super::CURRENT_VERSION_IMPL;
+
         crate::import_registrations! {
             Response {
-                760 -> 0x00,
+                CURRENT_VERSION_IMPL -> 0x00,
             }
             Pong {
-                760 -> 0x01,
+                CURRENT_VERSION_IMPL -> 0x01,
             }
         }
     }
@@ -237,15 +249,17 @@ pub mod login {
             pub data: Vec<u8>,
         }
 
+        use super::super::CURRENT_VERSION_IMPL;
+
         crate::import_registrations! {
             LoginStart {
-                760 -> 0x00,
+                CURRENT_VERSION_IMPL -> 0x00,
             }
             EncryptionResponse {
-                760 -> 0x01,
+                CURRENT_VERSION_IMPL -> 0x01,
             }
             LoginPluginResponse {
-                760 -> 0x02,
+                CURRENT_VERSION_IMPL -> 0x02,
             }
         }
     }
@@ -315,21 +329,23 @@ pub mod login {
             pub data: Vec<u8>,
         }
 
+        use super::super::CURRENT_VERSION_IMPL;
+
         crate::import_registrations! {
             Disconnect {
-                760 -> 0x00,
+                CURRENT_VERSION_IMPL -> 0x00,
             }
             EncryptionRequest {
-                760 -> 0x01,
+                CURRENT_VERSION_IMPL -> 0x01,
             }
             LoginSuccess {
-                760 -> 0x02,
+                CURRENT_VERSION_IMPL -> 0x02,
             }
             SetCompression {
-                760 -> 0x03,
+                CURRENT_VERSION_IMPL -> 0x03,
             }
             LoginPluginRequest {
-                760 -> 0x04,
+                CURRENT_VERSION_IMPL -> 0x04,
             }
         }
     }
