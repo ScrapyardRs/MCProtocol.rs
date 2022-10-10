@@ -17,7 +17,9 @@ pub mod handshaking {
     pub mod sb {
         use drax::VarInt;
 
-        #[derive(drax_derive::DraxTransport, Debug, Copy, Clone)]
+        #[derive(
+            drax_derive::DraxTransport, Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq,
+        )]
         #[drax(key = {match VarInt})]
         pub enum NextState {
             Handshaking,
