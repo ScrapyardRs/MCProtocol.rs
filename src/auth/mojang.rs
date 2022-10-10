@@ -468,8 +468,8 @@ pub async fn auth_client<
                                 ValidationError::InvalidSharedSecret,
                             ))
                         }
-                    };
-                };
+                    }
+                }
             }
 
             let read_stream = stream!(shared_secret, packet_writer);
