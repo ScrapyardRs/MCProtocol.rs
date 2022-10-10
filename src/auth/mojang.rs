@@ -348,13 +348,19 @@ async fn encryption_response(
     }
 }
 
-pub struct AuthenticatedClient<R: AsyncRead + Send + Sync, W: AsyncWrite + Send + Sync> {
+pub struct AuthenticatedClient<
+    R: AsyncRead + Send + Sync + Unpin + Sized,
+    W: AsyncWrite + Send + Sync + Unpin + Sized,
+> {
     pub read_write: BlankMcReadWrite<DecryptRead<R>, EncryptedWriter<W>>,
     pub profile: GameProfile,
     pub key: Option<IdentifiedKey>,
 }
 
-pub async fn auth_client<R: AsyncRead + Unpin + Sized + Send + Sync, W: AsyncWrite + Unpin + Sized + Send + Sync>(
+pub async fn auth_client<
+    R: AsyncRead + Unpin + Sized + Send + Sync,
+    W: AsyncWrite + Unpin + Sized + Send + Sync,
+>(
     read: R,
     write: W,
     handshake: Handshake,
