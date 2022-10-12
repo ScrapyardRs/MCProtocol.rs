@@ -78,10 +78,10 @@ pub mod status {
 
         crate::import_registrations! {
             Request {
-                CURRENT_VERSION_IMPL -> 0x00,
+                0..CURRENT_VERSION_IMPL -> 0x00,
             }
             Ping {
-                CURRENT_VERSION_IMPL -> 0x01,
+                0..CURRENT_VERSION_IMPL -> 0x01,
             }
         }
     }
@@ -137,10 +137,10 @@ pub mod status {
 
         crate::import_registrations! {
             Response {
-                CURRENT_VERSION_IMPL -> 0x00,
+                0..CURRENT_VERSION_IMPL -> 0x00,
             }
             Pong {
-                CURRENT_VERSION_IMPL -> 0x01,
+                0..CURRENT_VERSION_IMPL -> 0x01,
             }
         }
     }
@@ -223,6 +223,12 @@ pub mod login {
             pub sig_data: Maybe<MojangIdentifiedKey>,
             pub sig_holder: Maybe<Uuid>,
         }
+        
+        #[derive(drax_derive::DraxTransport, Debug)]
+        pub struct LegacyLoginStart {
+            #[drax(limit = 16)]
+            pub name: String,
+        }
 
         #[derive(drax_derive::DraxTransport, Debug)]
         #[drax(key = {match bool})]
@@ -241,6 +247,20 @@ pub mod login {
             pub shared_secret: SizedVec<u8>,
             pub response_data: EncryptionResponseData,
         }
+        
+        #[derive(drax_derive::DraxTransport, Debug)]
+        pub struct LegacyEncryptionResponse {
+            pub shared_secret: SizedVec<u8>,
+            pub verify_token: SizedVec<u8>,
+        }
+
+        #[derive(drax_derive::DraxTransport, Debug)]
+        pub struct OldEncryptionResponse {
+            pub shared_secret_length: u16,
+            pub shared_secret: Vec<u8>,
+            pub verify_token_length: u16,
+            pub verify_token: Vec<u8>,
+        }
 
         #[derive(drax_derive::DraxTransport, Debug)]
         pub struct LoginPluginResponse {
@@ -253,13 +273,22 @@ pub mod login {
 
         crate::import_registrations! {
             LoginStart {
-                CURRENT_VERSION_IMPL -> 0x00,
+                759..CURRENT_VERSION_IMPL -> 0x00,
+            }
+            LegacyLoginStart {
+                0..758 -> 0x00,
             }
             EncryptionResponse {
-                CURRENT_VERSION_IMPL -> 0x01,
+                759..CURRENT_VERSION_IMPL -> 0x01,
+            }
+            LegacyEncryptionResponse {
+                47..758 -> 0x01,
+            }
+            OldEncryptionResponse {
+                0..5 -> 0x01,
             }
             LoginPluginResponse {
-                CURRENT_VERSION_IMPL -> 0x02,
+                382..CURRENT_VERSION_IMPL -> 0x02,
             }
         }
     }
@@ -273,6 +302,11 @@ pub mod login {
             #[drax(json = 262144)]
             pub reason: crate::chat::Chat,
         }
+        
+        #[derive(drax_derive::DraxTransport, Debug)]
+        pub struct LegacyDisconnect {
+            pub reason: String,
+        }
 
         #[derive(drax_derive::DraxTransport, Debug)]
         pub struct EncryptionRequest {
@@ -280,6 +314,15 @@ pub mod login {
             pub server_id: String,
             pub public_key: SizedVec<u8>,
             pub verify_token: SizedVec<u8>,
+        }
+
+        #[derive(drax_derive::DraxTransport, Debug)]
+        pub struct LegacyEncryptionRequest {
+            pub server_id: String,
+            pub public_key_length: u16,
+            pub public_key: Vec<u8>,
+            pub verify_token_length: u16,
+            pub verify_token: Vec<u8>,
         }
 
         #[derive(drax_derive::DraxTransport, Debug)]
@@ -305,6 +348,21 @@ pub mod login {
             #[drax(limit = 16)]
             pub username: String,
             pub properties: SizedVec<LoginProperty>,
+        }
+        
+        #[derive(drax_derive::DraxTransport, Debug)]
+        pub struct LegacyLoginSuccess {
+            pub uuid: uuid::Uuid,
+            #[drax(limit = 16)]
+            pub username: String,
+        }
+        
+        #[derive(drax_derive::DraxTransport, Debug)]
+        pub struct OldLoginSuccess {
+            #[drax(limit = 36)]
+            pub uuid: String,
+            #[drax(limit = 16)]
+            pub username: String,
         }
 
         impl From<&GameProfile> for LoginSuccess {
@@ -333,19 +391,31 @@ pub mod login {
 
         crate::import_registrations! {
             Disconnect {
-                CURRENT_VERSION_IMPL -> 0x00,
+                47..CURRENT_VERSION_IMPL -> 0x00,
+            }
+            LegacyDisconnect {
+                0..5 -> 0x00,
             }
             EncryptionRequest {
-                CURRENT_VERSION_IMPL -> 0x01,
+                47..CURRENT_VERSION_IMPL -> 0x01,
+            }
+            LegacyEncryptionRequest {
+                0..5 -> 0x01,
             }
             LoginSuccess {
-                CURRENT_VERSION_IMPL -> 0x02,
+                759..CURRENT_VERSION_IMPL -> 0x02,
+            }
+            LegacyLoginSuccess {
+                707..758 -> 0x02,
+            }
+            OldLoginSuccess {
+                0..706 -> 0x02,
             }
             SetCompression {
-                CURRENT_VERSION_IMPL -> 0x03,
+                47..CURRENT_VERSION_IMPL -> 0x03,
             }
             LoginPluginRequest {
-                CURRENT_VERSION_IMPL -> 0x04,
+                382..CURRENT_VERSION_IMPL -> 0x04,
             }
         }
     }
