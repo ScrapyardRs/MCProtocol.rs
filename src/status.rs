@@ -4,7 +4,9 @@ use crate::protocol::status::cb::{
     Pong, Response, StatusResponse, StatusResponsePlayers, StatusResponseVersion,
 };
 use crate::protocol::status::sb::{Ping, Request};
-use crate::registry::{RegistryError, UNKNOWN_VERSION};
+use crate::registry::{
+    AsyncPacketRegistry, MutAsyncPacketRegistry, RegistryError, UNKNOWN_VERSION,
+};
 use crate::{chat, pin_fut};
 use drax::prelude::BoxFuture;
 use drax::VarInt;
@@ -45,8 +47,9 @@ pub async fn handle_status_client<
     R: AsyncRead + Unpin + Sized + Send + Sync,
     W: AsyncWrite + Unpin + Sized + Send + Sync,
     Func: (Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,
+    Reg: MutAsyncPacketRegistry<(), StatusFunctionResponse> + Send + Sync,
 >(
-    read: R,
+    mut status_pipeline: AsyncMinecraftProtocolPipeline<R, (), StatusFunctionResponse, Reg>,
     write: W,
     handshake: Handshake,
     status_responder: Arc<Func>,
@@ -55,7 +58,6 @@ pub async fn handle_status_client<
 
     log::trace!("Creating status pipeline");
 
-    let mut status_pipeline = AsyncMinecraftProtocolPipeline::from_handshake(read, &handshake);
     let mut packet_writer = MinecraftProtocolWriter::from_handshake(write, &handshake);
 
     log::trace!("Executing packets internal.");
@@ -71,7 +73,12 @@ pub async fn handle_status_client<
                 description,
                 favicon,
             } = (status_responder)(handshake).await;
-            log::trace!("Responding with: {:?}, {:?}, {:?}", players, description, favicon);
+            log::trace!(
+                "Responding with: {:?}, {:?}, {:?}",
+                players,
+                description,
+                favicon
+            );
             let status = StatusResponse {
                 version: StatusResponseVersion {
                     name: proto_to_string(protocol_version).to_string(),

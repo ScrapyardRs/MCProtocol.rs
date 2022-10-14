@@ -61,6 +61,26 @@ impl<R: AsyncRead + Send + Sync, Context: Send + Sync, PacketOutput: Send + Sync
         }
     }
 
+    pub fn clear_registry<NC: Send + Sync, NP: Send + Sync>(
+        self,
+    ) -> AsyncMinecraftProtocolPipeline<R, NC, NP, MappedAsyncPacketRegistry<NC, NP>> {
+        let Self {
+            read,
+            registry,
+            processor_context,
+            drax_transport,
+            ..
+        } = self;
+        AsyncMinecraftProtocolPipeline {
+            read,
+            registry: MappedAsyncPacketRegistry::new(registry.staple()),
+            processor_context,
+            drax_transport,
+            _phantom_context: Default::default(),
+            _phantom_packet_output: Default::default(),
+        }
+    }
+
     pub fn from_handshake(read: R, handshake: &Handshake) -> Self {
         Self::from_protocol_version(read, handshake.protocol_version)
     }
@@ -159,10 +179,6 @@ impl<
         Reg: AsyncPacketRegistry<Context, PacketOutput> + Send + Sync,
     > AsyncMinecraftProtocolPipeline<R, Context, PacketOutput, Reg>
 {
-    pub fn into_inner_read(self) -> R {
-        self.read
-    }
-
     pub fn with_registry<
         NContext: Send + Sync,
         NPacketOutput: Send + Sync,
@@ -207,8 +223,8 @@ impl<
     }
 
     pub fn retrieve_data_mut<T: crate::prelude::Key>(&mut self) -> Option<&mut T::Value>
-        where
-            T::Value: Send,
+    where
+        T::Value: Send,
     {
         self.processor_context.retrieve_data_mut::<T>()
     }

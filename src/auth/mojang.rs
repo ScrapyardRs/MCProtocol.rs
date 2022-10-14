@@ -12,7 +12,9 @@ use crate::protocol::login::cb::{EncryptionRequest, LoginSuccess, SetCompression
 use crate::protocol::login::sb::{EncryptionResponse, EncryptionResponseData, LoginStart};
 use crate::protocol::login::{IdentifiedKey, MojangIdentifiedKey};
 use crate::protocol::GameProfile;
-use crate::registry::{MCPacketWriter, MappedAsyncPacketRegistry, RegistryError};
+use crate::registry::{
+    MCPacketWriter, MappedAsyncPacketRegistry, MutAsyncPacketRegistry, RegistryError,
+};
 use cipher::NewCipher;
 use drax::transport::encryption::{DecryptRead, EncryptedWriter, EncryptionStream};
 use drax::transport::{DraxTransport, TransportProcessorContext};
@@ -28,7 +30,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;
 
-enum AuthClientState {
+pub enum AuthClientState {
     ExpectingLoginStart,
     ExpectingEncryptionResponse {
         verify_bytes: Vec<u8>,
@@ -36,7 +38,7 @@ enum AuthClientState {
     },
 }
 
-struct AuthClientContext<W: AsyncWrite + Send + Sync + Unpin + Sized> {
+pub struct AuthClientContext<W: AsyncWrite + Send + Sync + Unpin + Sized> {
     state: AuthClientState,
     key: Option<IdentifiedKey>,
     auth_config: Arc<AuthConfiguration>,
@@ -131,7 +133,7 @@ impl<W: AsyncWrite + Unpin + Sized + Send + Sync> Debug for AuthError<W> {
 
 impl<W: AsyncWrite + Unpin + Sized + Send + Sync> std::error::Error for AuthError<W> {}
 
-enum AuthFunctionResponse {
+pub enum AuthFunctionResponse {
     InvalidState,
     KeyError(KeyError),
     ValidationError(ValidationError),
@@ -397,13 +399,18 @@ pub struct AuthenticatedClient<
 pub async fn auth_client<
     R: AsyncRead + Unpin + Sized + Send + Sync,
     W: AsyncWrite + Unpin + Sized + Send + Sync,
+    Reg: MutAsyncPacketRegistry<AuthClientContext<W>, AuthFunctionResponse> + Send + Sync,
 >(
-    read: R,
+    mut auth_pipeline: AsyncMinecraftProtocolPipeline<
+        R,
+        AuthClientContext<W>,
+        AuthFunctionResponse,
+        Reg,
+    >,
     write: W,
     handshake: Handshake,
     auth_config: Arc<AuthConfiguration>,
 ) -> Result<AuthenticatedClient<R, W>, AuthError<W>> {
-    let mut auth_pipeline = AsyncMinecraftProtocolPipeline::from_handshake(read, &handshake);
     auth_pipeline.register(pin_fut!(login_start));
     auth_pipeline.register(pin_fut!(encryption_response));
 

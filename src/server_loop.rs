@@ -98,13 +98,18 @@ impl<
             NextState::Status => {
                 log::trace!("Reading status client: {:?}", handshake);
                 let res = crate::status::handle_status_client(
-                    handshake_pipeline.into_inner_read(),
+                    handshake_pipeline.clear_registry(),
                     write,
                     handshake,
                     arc_self.status_responder.clone(),
                 )
                 .await;
-                if matches!(res, Err(RegistryError::DraxTransportError(drax::transport::Error::EOF))) {
+                if matches!(
+                    res,
+                    Err(RegistryError::DraxTransportError(
+                        drax::transport::Error::EOF
+                    ))
+                ) {
                     return Ok(());
                 }
                 res?;
@@ -114,7 +119,7 @@ impl<
                 IncomingAuthenticationOption::MOJANG => {
                     log::trace!("Logging client in.");
                     let authenticated_client = match crate::auth::mojang::auth_client(
-                        handshake_pipeline.into_inner_read(),
+                        handshake_pipeline.clear_registry(),
                         write,
                         handshake,
                         arc_self.auth_config.clone(),

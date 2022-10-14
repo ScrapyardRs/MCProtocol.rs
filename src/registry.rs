@@ -128,6 +128,10 @@ impl<Context: Send + Sync, Output: Send + Sync> MappedAsyncPacketRegistry<Contex
             mappings: HashMap::new(),
         }
     }
+
+    pub fn staple(&self) -> VarInt {
+        self.staple
+    }
 }
 
 impl<Context: Send + Sync, Output: Send + Sync> MutAsyncPacketRegistry<Context, Output>
