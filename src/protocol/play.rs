@@ -166,8 +166,8 @@ pub mod cb {
 
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct LevelChunkWithLight {
-        chunk_data: LevelChunkData,
-        data: LightUpdateData,
+        pub chunk_data: LevelChunkData,
+        pub light_data: LightUpdateData,
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
