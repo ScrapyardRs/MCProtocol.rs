@@ -61,8 +61,9 @@ impl<R: AsyncRead + Send + Sync, Context: Send + Sync, PacketOutput: Send + Sync
         }
     }
 
-    pub fn clear_registry<NC: Send + Sync, NP: Send + Sync>(
+    pub fn rewrite_registry<NC: Send + Sync, NP: Send + Sync>(
         self,
+        protocol_version: VarInt,
     ) -> AsyncMinecraftProtocolPipeline<R, NC, NP, MappedAsyncPacketRegistry<NC, NP>> {
         let Self {
             read,
@@ -71,10 +72,14 @@ impl<R: AsyncRead + Send + Sync, Context: Send + Sync, PacketOutput: Send + Sync
             drax_transport,
             ..
         } = self;
+
+        let mut context = TransportProcessorContext::new();
+        context.insert_data::<ProtocolVersionKey>(protocol_version);
+
         AsyncMinecraftProtocolPipeline {
             read,
-            registry: MappedAsyncPacketRegistry::new(registry.staple()),
-            processor_context,
+            registry: MappedAsyncPacketRegistry::new(protocol_version),
+            processor_context: context,
             drax_transport,
             _phantom_context: Default::default(),
             _phantom_packet_output: Default::default(),
