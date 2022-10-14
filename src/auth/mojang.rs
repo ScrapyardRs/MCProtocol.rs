@@ -12,7 +12,9 @@ use crate::protocol::login::cb::{EncryptionRequest, LoginSuccess, SetCompression
 use crate::protocol::login::sb::{EncryptionResponse, EncryptionResponseData, LoginStart};
 use crate::protocol::login::{IdentifiedKey, MojangIdentifiedKey};
 use crate::protocol::GameProfile;
-use crate::registry::{MCPacketWriter, MappedAsyncPacketRegistry, RegistryError};
+use crate::registry::{
+    MCPacketWriter, MappedAsyncPacketRegistry, MutAsyncPacketRegistry, RegistryError,
+};
 use cipher::NewCipher;
 use drax::transport::encryption::{DecryptRead, EncryptedWriter, EncryptionStream};
 use drax::transport::{DraxTransport, TransportProcessorContext};
@@ -28,7 +30,7 @@ use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;
 
-enum AuthClientState {
+pub enum AuthClientState {
     ExpectingLoginStart,
     ExpectingEncryptionResponse {
         verify_bytes: Vec<u8>,
@@ -36,10 +38,11 @@ enum AuthClientState {
     },
 }
 
-struct AuthClientContext {
+pub struct AuthClientContext<W: AsyncWrite + Send + Sync + Unpin + Sized> {
     state: AuthClientState,
     key: Option<IdentifiedKey>,
     auth_config: Arc<AuthConfiguration>,
+    writer: MinecraftProtocolWriter<W>,
 }
 
 #[derive(Debug)]
@@ -130,7 +133,7 @@ impl<W: AsyncWrite + Unpin + Sized + Send + Sync> Debug for AuthError<W> {
 
 impl<W: AsyncWrite + Unpin + Sized + Send + Sync> std::error::Error for AuthError<W> {}
 
-enum AuthFunctionResponse {
+pub enum AuthFunctionResponse {
     InvalidState,
     KeyError(KeyError),
     ValidationError(ValidationError),
@@ -147,8 +150,8 @@ enum AuthFunctionResponse {
     },
 }
 
-async fn login_start(
-    context: &mut AuthClientContext,
+async fn login_start<W: AsyncWrite + Send + Sync + Unpin + Sized>(
+    context: &mut AuthClientContext<W>,
     login_start: LoginStart,
 ) -> AuthFunctionResponse {
     log::trace!("Got login start: {:?}", login_start);
@@ -229,6 +232,25 @@ async fn login_start(
         }
     };
 
+    let key_der = private_key_to_der(&context.auth_config.server_private_key);
+    let mut verify_token = [0, 0, 0, 0];
+    rand::thread_rng().fill_bytes(&mut verify_token);
+
+    let encryption_request = EncryptionRequest {
+        server_id: format!(""),
+        public_key: key_der,
+        verify_token: Vec::from(verify_token),
+    };
+
+    if let Err(err) = context.writer.write_packet(encryption_request).await {
+        return AuthFunctionResponse::TransportError(err);
+    }
+
+    context.state = AuthClientState::ExpectingEncryptionResponse {
+        verify_bytes: Vec::from(verify_token),
+        login_username: login_start.name.clone(),
+    };
+
     AuthFunctionResponse::LoginStartPass {
         mojang_key: login_start.sig_data,
         key,
@@ -237,8 +259,8 @@ async fn login_start(
     }
 }
 
-async fn encryption_response(
-    context: &mut AuthClientContext,
+async fn encryption_response<W: AsyncWrite + Send + Sync + Unpin + Sized>(
+    context: &mut AuthClientContext<W>,
     encryption_response: EncryptionResponse,
 ) -> AuthFunctionResponse {
     let (expected_verify, username) = match &context.state {
@@ -377,78 +399,62 @@ pub struct AuthenticatedClient<
 pub async fn auth_client<
     R: AsyncRead + Unpin + Sized + Send + Sync,
     W: AsyncWrite + Unpin + Sized + Send + Sync,
+    Reg: MutAsyncPacketRegistry<AuthClientContext<W>, AuthFunctionResponse> + Send + Sync,
 >(
-    read: R,
+    mut auth_pipeline: AsyncMinecraftProtocolPipeline<
+        R,
+        AuthClientContext<W>,
+        AuthFunctionResponse,
+        Reg,
+    >,
     write: W,
     handshake: Handshake,
     auth_config: Arc<AuthConfiguration>,
 ) -> Result<AuthenticatedClient<R, W>, AuthError<W>> {
-    log::trace!("Authenticating client with mojang.");
-    let mut auth_pipeline = AsyncMinecraftProtocolPipeline::from_handshake(read, &handshake);
     auth_pipeline.register(pin_fut!(login_start));
     auth_pipeline.register(pin_fut!(encryption_response));
 
-    let mut packet_writer = MinecraftProtocolWriter::from_handshake(write, &handshake);
-
-    let mut context = AuthClientContext {
+    let mut context = AuthClientContext::<W> {
         state: AuthClientState::ExpectingLoginStart,
         key: None,
         auth_config: auth_config.clone(),
+        writer: MinecraftProtocolWriter::from_handshake(write, &handshake),
     };
 
     let matched = match auth_pipeline.execute_next_packet(&mut context).await {
         Ok(matched) => matched,
-        Err(err) => return Err(AuthError::RegistryError(packet_writer, err)),
+        Err(err) => return Err(AuthError::RegistryError(context.writer, err)),
     };
 
-    log::trace!("Executed next packet successfully.");
-
-    let (name, expected_uuid, mojang_key) = match matched {
+    let (expected_uuid, mojang_key) = match matched {
         AuthFunctionResponse::LoginStartPass {
             mojang_key,
             key,
-            name,
             expected_uuid,
+            ..
         } => {
             context.key = key;
-            (name, expected_uuid, mojang_key)
+            (expected_uuid, mojang_key)
         }
         AuthFunctionResponse::ValidationError(err) => {
-            return Err(AuthError::ValidationError(packet_writer, err))
+            return Err(AuthError::ValidationError(context.writer, err))
         }
         AuthFunctionResponse::TransportError(err) => {
-            return Err(AuthError::TransportError(packet_writer, err))
+            return Err(AuthError::TransportError(context.writer, err))
         }
-        AuthFunctionResponse::KeyError(err) => return Err(AuthError::KeyError(packet_writer, err)),
-        AuthFunctionResponse::InvalidState => return Err(AuthError::InvalidState(packet_writer)),
-        _ => return Err(AuthError::InvalidState(packet_writer)),
+        AuthFunctionResponse::KeyError(err) => {
+            return Err(AuthError::KeyError(context.writer, err))
+        }
+        AuthFunctionResponse::InvalidState => return Err(AuthError::InvalidState(context.writer)),
+        _ => return Err(AuthError::InvalidState(context.writer)),
     };
-
-    let key_der = private_key_to_der(&auth_config.server_private_key);
-    let mut verify_token = [0, 0, 0, 0];
-    rand::thread_rng().fill_bytes(&mut verify_token);
-
-    let encryption_request = EncryptionRequest {
-        server_id: format!(""),
-        public_key: key_der,
-        verify_token: Vec::from(verify_token),
-    };
-
-    context.state = AuthClientState::ExpectingEncryptionResponse {
-        verify_bytes: Vec::from(verify_token),
-        login_username: name,
-    };
-
-    if let Err(err) = packet_writer.write_packet(encryption_request).await {
-        return Err(AuthError::TransportError(packet_writer, err));
-    }
 
     let matched = match auth_pipeline.execute_next_packet(&mut context).await {
         Ok(matched) => matched,
-        Err(err) => return Err(AuthError::RegistryError(packet_writer, err)),
+        Err(err) => return Err(AuthError::RegistryError(context.writer, err)),
     };
 
-    let (mut new_read, mut new_write, profile) = match matched {
+    let (mut new_read, mut new_write, profile, key) = match matched {
         AuthFunctionResponse::AuthComplete {
             profile,
             shared_secret,
@@ -456,14 +462,14 @@ pub async fn auth_client<
             if let Some(expected_uuid) = expected_uuid.as_ref() {
                 if profile.id.ne(expected_uuid) {
                     return Err(AuthError::ValidationError(
-                        packet_writer,
+                        context.writer,
                         ValidationError::InvalidData,
                     ));
                 }
             }
 
             macro_rules! stream {
-                ($shared_secret:ident, $packet_writer:ident) => {
+                ($shared_secret:ident, $packet_writer:expr) => {
                     match EncryptionStream::new_from_slices(&$shared_secret, &$shared_secret) {
                         Ok(stream) => stream,
                         Err(_) => {
@@ -476,22 +482,27 @@ pub async fn auth_client<
                 };
             }
 
-            let read_stream = stream!(shared_secret, packet_writer);
-            let write_stream = stream!(shared_secret, packet_writer);
+            let read_stream = stream!(shared_secret, context.writer);
+            let write_stream = stream!(shared_secret, context.writer);
 
             let new_read = auth_pipeline.enable_decryption(read_stream);
-            let new_write = packet_writer.enable_encryption(write_stream);
-            (new_read, new_write, profile)
+
+            let AuthClientContext { key, writer, .. } = context;
+
+            let new_write = writer.enable_encryption(write_stream);
+            (new_read, new_write, profile, key)
         }
         AuthFunctionResponse::ValidationError(err) => {
-            return Err(AuthError::ValidationError(packet_writer, err))
+            return Err(AuthError::ValidationError(context.writer, err))
         }
         AuthFunctionResponse::TransportError(err) => {
-            return Err(AuthError::TransportError(packet_writer, err))
+            return Err(AuthError::TransportError(context.writer, err))
         }
-        AuthFunctionResponse::KeyError(err) => return Err(AuthError::KeyError(packet_writer, err)),
-        AuthFunctionResponse::InvalidState => return Err(AuthError::InvalidState(packet_writer)),
-        _ => return Err(AuthError::InvalidState(packet_writer)),
+        AuthFunctionResponse::KeyError(err) => {
+            return Err(AuthError::KeyError(context.writer, err))
+        }
+        AuthFunctionResponse::InvalidState => return Err(AuthError::InvalidState(context.writer)),
+        _ => return Err(AuthError::InvalidState(context.writer)),
     };
 
     if auth_config.compression_threshold >= 0 {
@@ -514,7 +525,7 @@ pub async fn auth_client<
             new_write,
         ),
         profile,
-        key: context.key,
+        key,
         mojang_key,
     })
 }

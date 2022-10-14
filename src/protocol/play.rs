@@ -1,29 +1,30 @@
-const MULTIPLY_DE_BRUIJN_BIT_POSITION: [u64; 32] = [
+const MULTIPLY_DE_BRUIJN_BIT_POSITION: [i32; 32] = [
     0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16, 7, 26,
     12, 18, 6, 11, 5, 10, 9,
 ];
 
-const fn ceil_log_2(n: u64) -> u64 {
+pub const fn ceil_log_2(n: i32) -> i32 {
     let n = if is_power_of_2(n) { n } else { shift_2(n) };
-    MULTIPLY_DE_BRUIJN_BIT_POSITION[(((n * 125613361u64) >> 27u64) & 0x1Fu64) as usize]
+    MULTIPLY_DE_BRUIJN_BIT_POSITION
+        [((((n as u64 * 125613361u64) >> 27u64) as i32) & 0x1Fi32) as usize]
 }
 
-const fn is_power_of_2(n: u64) -> bool {
-    n != 0u64 && (n & (n - 1u64)) == 0u64
+const fn is_power_of_2(n: i32) -> bool {
+    n != 0i32 && (n & (n - 1i32)) == 0i32
 }
 
-const fn shift_2(n: u64) -> u64 {
-    let mut n2 = n - 1u64;
-    n2 |= n2 >> 1u64;
-    n2 |= n2 >> 2u64;
-    n2 |= n2 >> 4u64;
-    n2 |= n2 >> 8u64;
-    n2 |= n2 >> 16u64;
-    n2 + 1u64
+const fn shift_2(n: i32) -> i32 {
+    let mut n2 = n - 1i32;
+    n2 |= n2 >> 1i32;
+    n2 |= n2 >> 2i32;
+    n2 |= n2 >> 4i32;
+    n2 |= n2 >> 8i32;
+    n2 |= n2 >> 16i32;
+    n2 + 1i32
 }
 
-const fn log2(n: u64) -> u64 {
-    ceil_log_2(n) - if is_power_of_2(n) { 0u64 } else { 1u64 }
+const fn log2(n: i32) -> i32 {
+    ceil_log_2(n) - if is_power_of_2(n) { 0i32 } else { 1i32 }
 }
 
 #[derive(Debug)]
@@ -34,7 +35,7 @@ pub struct BlockPos {
 }
 
 impl BlockPos {
-    const PACKED_Z_LENGTH: i32 = (1u64 + log2(shift_2(30000000u64))) as i32;
+    const PACKED_Z_LENGTH: i32 = (1i32 + log2(shift_2(30000000)));
     const PACKED_X_LENGTH: i32 = (Self::PACKED_Z_LENGTH) as i32;
     const PACKED_Y_LENGTH: i32 =
         (64u64 - Self::PACKED_X_LENGTH as u64 - Self::PACKED_Z_LENGTH as u64) as i32;
@@ -117,7 +118,9 @@ pub mod cb {
     use drax::{nbt::CompoundTag, Maybe, SizedVec, VarInt};
     use uuid::Uuid;
 
+    use crate::protocol::chunk::Chunk;
     use crate::{chat::Chat, commands::Command, protocol::GameProfile};
+    use crate::protocol::bit_storage::BitStorage;
 
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct DeclareCommands {
@@ -134,6 +137,37 @@ pub mod cb {
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct KeepAlive {
         pub id: u64,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct BlockEntityInfo {
+        pub packed_xz: u8,
+        pub y: i16,
+        pub block_type: VarInt,
+        pub tag: CompoundTag,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct LevelChunkData {
+        pub chunk: Chunk,
+        pub block_entities: SizedVec<BlockEntityInfo>,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct LightUpdateData {
+        pub trust_edges: bool,
+        pub sky_y_mask: SizedVec<u64>,
+        pub block_y_mask: SizedVec<u64>,
+        pub empty_sky_y_mask: SizedVec<u64>,
+        pub empty_block_y_mask: SizedVec<u64>,
+        pub sky_updates: SizedVec<SizedVec<u8>>,
+        pub block_updates: SizedVec<SizedVec<u8>>,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct LevelChunkWithLight {
+        pub chunk_data: LevelChunkData,
+        pub light_data: LightUpdateData,
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
@@ -252,6 +286,10 @@ pub mod cb {
 
         KeepAlive {
             CURRENT_VERSION_IMPL -> 0x20,
+        }
+
+        LevelChunkWithLight {
+            CURRENT_VERSION_IMPL -> 0x21,
         }
 
         JoinGame {

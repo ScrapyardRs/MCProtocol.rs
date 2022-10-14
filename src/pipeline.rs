@@ -61,6 +61,31 @@ impl<R: AsyncRead + Send + Sync, Context: Send + Sync, PacketOutput: Send + Sync
         }
     }
 
+    pub fn rewrite_registry<NC: Send + Sync, NP: Send + Sync>(
+        self,
+        protocol_version: VarInt,
+    ) -> AsyncMinecraftProtocolPipeline<R, NC, NP, MappedAsyncPacketRegistry<NC, NP>> {
+        let Self {
+            read,
+            registry,
+            processor_context,
+            drax_transport,
+            ..
+        } = self;
+
+        let mut context = TransportProcessorContext::new();
+        context.insert_data::<ProtocolVersionKey>(protocol_version);
+
+        AsyncMinecraftProtocolPipeline {
+            read,
+            registry: MappedAsyncPacketRegistry::new(protocol_version),
+            processor_context: context,
+            drax_transport,
+            _phantom_context: Default::default(),
+            _phantom_packet_output: Default::default(),
+        }
+    }
+
     pub fn from_handshake(read: R, handshake: &Handshake) -> Self {
         Self::from_protocol_version(read, handshake.protocol_version)
     }
@@ -118,6 +143,7 @@ impl<
         &mut self,
         context: &mut Context,
     ) -> Result<PacketOutput, RegistryError> {
+        log::trace!("Executing next packet...");
         self.execute_next_packet_timeout(context, Duration::from_secs(30))
             .await
     }
@@ -127,6 +153,7 @@ impl<
         context: &mut Context,
         timeout: Duration,
     ) -> Result<PacketOutput, RegistryError> {
+        log::trace!("Reading next packet with timeout {:?}", timeout);
         let next_packet_future = self
             .drax_transport
             .read_transport_packet(&mut self.processor_context, &mut self.read);
@@ -142,6 +169,7 @@ impl<
                 ));
             }
         };
+        log::trace!("Executing!");
         Ok(self
             .registry
             .execute(context, &mut self.processor_context, next_packet.data)?
@@ -156,10 +184,6 @@ impl<
         Reg: AsyncPacketRegistry<Context, PacketOutput> + Send + Sync,
     > AsyncMinecraftProtocolPipeline<R, Context, PacketOutput, Reg>
 {
-    pub fn into_inner_read(self) -> R {
-        self.read
-    }
-
     pub fn with_registry<
         NContext: Send + Sync,
         NPacketOutput: Send + Sync,
@@ -204,8 +228,8 @@ impl<
     }
 
     pub fn retrieve_data_mut<T: crate::prelude::Key>(&mut self) -> Option<&mut T::Value>
-        where
-            T::Value: Send,
+    where
+        T::Value: Send,
     {
         self.processor_context.retrieve_data_mut::<T>()
     }

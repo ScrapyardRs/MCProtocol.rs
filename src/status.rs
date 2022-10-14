@@ -4,7 +4,9 @@ use crate::protocol::status::cb::{
     Pong, Response, StatusResponse, StatusResponsePlayers, StatusResponseVersion,
 };
 use crate::protocol::status::sb::{Ping, Request};
-use crate::registry::{RegistryError, UNKNOWN_VERSION};
+use crate::registry::{
+    AsyncPacketRegistry, MutAsyncPacketRegistry, RegistryError, UNKNOWN_VERSION,
+};
 use crate::{chat, pin_fut};
 use drax::prelude::BoxFuture;
 use drax::VarInt;
@@ -24,10 +26,12 @@ pub enum StatusFunctionResponse {
 }
 
 pub async fn handle_request(_: &mut (), _: Request) -> StatusFunctionResponse {
+    log::trace!("Got request");
     StatusFunctionResponse::RequestForward
 }
 
 pub async fn handle_ping(_: &mut (), ping: Ping) -> StatusFunctionResponse {
+    log::trace!("Got ping!");
     StatusFunctionResponse::PingForward {
         start_time: ping.start_time,
     }
@@ -43,27 +47,38 @@ pub async fn handle_status_client<
     R: AsyncRead + Unpin + Sized + Send + Sync,
     W: AsyncWrite + Unpin + Sized + Send + Sync,
     Func: (Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,
+    Reg: MutAsyncPacketRegistry<(), StatusFunctionResponse> + Send + Sync,
 >(
-    read: R,
+    mut status_pipeline: AsyncMinecraftProtocolPipeline<R, (), StatusFunctionResponse, Reg>,
     write: W,
     handshake: Handshake,
     status_responder: Arc<Func>,
 ) -> Result<(), RegistryError> {
     let protocol_version = handshake.protocol_version;
 
-    let mut status_pipeline = AsyncMinecraftProtocolPipeline::from_handshake(read, &handshake);
+    log::trace!("Creating status pipeline");
+
     let mut packet_writer = MinecraftProtocolWriter::from_handshake(write, &handshake);
+
+    log::trace!("Executing packets internal.");
 
     status_pipeline.register(pin_fut!(handle_request));
     status_pipeline.register(pin_fut!(handle_ping));
 
     match status_pipeline.execute_next_packet(&mut ()).await? {
         StatusFunctionResponse::RequestForward => {
+            log::trace!("Listening to status request forward.");
             let StatusBuilder {
                 players,
                 description,
                 favicon,
             } = (status_responder)(handshake).await;
+            log::trace!(
+                "Responding with: {:?}, {:?}, {:?}",
+                players,
+                description,
+                favicon
+            );
             let status = StatusResponse {
                 version: StatusResponseVersion {
                     name: proto_to_string(protocol_version).to_string(),
