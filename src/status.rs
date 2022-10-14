@@ -24,10 +24,12 @@ pub enum StatusFunctionResponse {
 }
 
 pub async fn handle_request(_: &mut (), _: Request) -> StatusFunctionResponse {
+    log::trace!("Got request");
     StatusFunctionResponse::RequestForward
 }
 
 pub async fn handle_ping(_: &mut (), ping: Ping) -> StatusFunctionResponse {
+    log::trace!("Got ping!");
     StatusFunctionResponse::PingForward {
         start_time: ping.start_time,
     }
@@ -51,8 +53,12 @@ pub async fn handle_status_client<
 ) -> Result<(), RegistryError> {
     let protocol_version = handshake.protocol_version;
 
+    log::trace!("Creating status pipeline");
+
     let mut status_pipeline = AsyncMinecraftProtocolPipeline::from_handshake(read, &handshake);
     let mut packet_writer = MinecraftProtocolWriter::from_handshake(write, &handshake);
+
+    log::trace!("Executing packets internal.");
 
     status_pipeline.register(pin_fut!(handle_request));
     status_pipeline.register(pin_fut!(handle_ping));
