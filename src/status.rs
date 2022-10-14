@@ -59,11 +59,13 @@ pub async fn handle_status_client<
 
     match status_pipeline.execute_next_packet(&mut ()).await? {
         StatusFunctionResponse::RequestForward => {
+            log::trace!("Listening to status request forward.");
             let StatusBuilder {
                 players,
                 description,
                 favicon,
             } = (status_responder)(handshake).await;
+            log::trace!("Responding with: {:?}, {:?}, {:?}", players, description, favicon);
             let status = StatusResponse {
                 version: StatusResponseVersion {
                     name: proto_to_string(protocol_version).to_string(),

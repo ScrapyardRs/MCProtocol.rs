@@ -96,6 +96,7 @@ impl<
         let handshake: Handshake = handshake_pipeline.execute_next_packet(&mut ()).await?;
         match handshake.next_state {
             NextState::Status => {
+                log::trace!("Reading status client: {:?}", handshake);
                 let res = crate::status::handle_status_client(
                     handshake_pipeline.into_inner_read(),
                     write,
@@ -110,6 +111,7 @@ impl<
                 Ok(())
             }
             NextState::Login => match arc_self.auth_option {
+                log::trace!("Logging client in.");
                 IncomingAuthenticationOption::MOJANG => {
                     let authenticated_client = match crate::auth::mojang::auth_client(
                         handshake_pipeline.into_inner_read(),
