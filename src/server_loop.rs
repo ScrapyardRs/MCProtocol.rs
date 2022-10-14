@@ -5,11 +5,9 @@ use crate::pin_fut;
 use crate::pipeline::AsyncMinecraftProtocolPipeline;
 use crate::protocol::handshaking::sb::{Handshake, NextState};
 use crate::protocol::login::cb::Disconnect;
-use crate::registry::{MappedAsyncPacketRegistry, RegistryError};
+use crate::registry::RegistryError;
 use crate::status::StatusBuilder;
 use drax::prelude::BoxFuture;
-use drax::transport::encryption::{DecryptRead, EncryptedWriter};
-use std::future::Future;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -98,13 +96,17 @@ impl<
         let handshake: Handshake = handshake_pipeline.execute_next_packet(&mut ()).await?;
         match handshake.next_state {
             NextState::Status => {
-                crate::status::handle_status_client(
+                let res = crate::status::handle_status_client(
                     handshake_pipeline.into_inner_read(),
                     write,
                     handshake,
                     arc_self.status_responder.clone(),
                 )
-                .await?;
+                .await;
+                if matches!(res, Err(RegistryError::DraxTransportError(drax::transport::Error::EOF))) {
+                    return Ok(());
+                }
+                res?;
                 Ok(())
             }
             NextState::Login => match arc_self.auth_option {
