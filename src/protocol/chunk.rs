@@ -603,6 +603,7 @@ impl Chunk {
             },
             storage: BitStorage::new(0, 0),
         };
+        section.block_count = 16 * 16;
         for x in 0..15 {
             for z in 0..15 {
                 self.height_maps.update_inner(x, y, z, block_id)?;
