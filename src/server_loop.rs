@@ -111,8 +111,8 @@ impl<
                 Ok(())
             }
             NextState::Login => match arc_self.auth_option {
-                log::trace!("Logging client in.");
                 IncomingAuthenticationOption::MOJANG => {
+                    log::trace!("Logging client in.");
                     let authenticated_client = match crate::auth::mojang::auth_client(
                         handshake_pipeline.into_inner_read(),
                         write,
