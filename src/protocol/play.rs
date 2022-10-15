@@ -286,20 +286,20 @@ pub mod cb {
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct SetSubtitle {
         #[drax(json = 32767)]
-        text: Chat,
+        pub text: Chat,
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct SetTitle {
         #[drax(json = 32767)]
-        text: Chat,
+        pub text: Chat,
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct SetTitleAnimationTimes {
-        fade_in: i32,
-        stay: i32,
-        fade_out: i32,
+        pub fade_in: i32,
+        pub stay: i32,
+        pub fade_out: i32,
     }
 
     use super::super::CURRENT_VERSION_IMPL;
