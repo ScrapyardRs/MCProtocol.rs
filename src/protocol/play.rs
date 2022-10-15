@@ -283,6 +283,25 @@ pub mod cb {
         pub dismount_vehicle: bool,
     }
 
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct SetSubtitle {
+        #[drax(json = 32767)]
+        text: Chat,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct SetTitle {
+        #[drax(json = 32767)]
+        text: Chat,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct SetTitleAnimationTimes {
+        fade_in: i32,
+        stay: i32,
+        fade_out: i32,
+    }
+
     use super::super::CURRENT_VERSION_IMPL;
 
     crate::import_registrations! {
@@ -320,6 +339,18 @@ pub mod cb {
 
         PlayerPosition {
             CURRENT_VERSION_IMPL -> 0x39,
+        }
+
+        SetSubtitle {
+            CURRENT_VERSION_IMPL -> 0x5B,
+        }
+
+        SetTitle {
+            CURRENT_VERSION_IMPL -> 0x5D,
+        }
+
+        SetTitleAnimationTimes {
+            CURRENT_VERSION_IMPL -> 0x5E,
         }
     }
 }
