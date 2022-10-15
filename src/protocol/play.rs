@@ -118,9 +118,9 @@ pub mod cb {
     use drax::{nbt::CompoundTag, Maybe, SizedVec, VarInt};
     use uuid::Uuid;
 
+    use crate::protocol::bit_storage::BitStorage;
     use crate::protocol::chunk::Chunk;
     use crate::{chat::Chat, commands::Command, protocol::GameProfile};
-    use crate::protocol::bit_storage::BitStorage;
 
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct DeclareCommands {

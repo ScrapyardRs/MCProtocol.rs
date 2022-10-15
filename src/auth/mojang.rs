@@ -397,20 +397,19 @@ pub struct AuthenticatedClient<
 }
 
 pub async fn auth_client<
+    IC: Send + Sync,
+    IO: Send + Sync,
     R: AsyncRead + Unpin + Sized + Send + Sync,
     W: AsyncWrite + Unpin + Sized + Send + Sync,
-    Reg: MutAsyncPacketRegistry<AuthClientContext<W>, AuthFunctionResponse> + Send + Sync,
+    Reg: MutAsyncPacketRegistry<IC, IO> + Send + Sync,
 >(
-    mut auth_pipeline: AsyncMinecraftProtocolPipeline<
-        R,
-        AuthClientContext<W>,
-        AuthFunctionResponse,
-        Reg,
-    >,
+    auth_pipeline: AsyncMinecraftProtocolPipeline<R, IC, IO, Reg>,
     write: W,
     handshake: Handshake,
     auth_config: Arc<AuthConfiguration>,
 ) -> Result<AuthenticatedClient<R, W>, AuthError<W>> {
+    let mut auth_pipeline = auth_pipeline.clear_registry();
+    auth_pipeline.clear_data();
     auth_pipeline.register(pin_fut!(login_start));
     auth_pipeline.register(pin_fut!(encryption_response));
 
@@ -480,7 +479,7 @@ pub async fn auth_client<
                         }
                     }
                 };
-            }
+            };
 
             let read_stream = stream!(shared_secret, context.writer);
             let write_stream = stream!(shared_secret, context.writer);

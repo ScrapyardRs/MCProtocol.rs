@@ -1,7 +1,7 @@
 use drax::{Maybe, SizedVec, VarInt};
 
-pub mod chunk;
 pub mod bit_storage;
+pub mod chunk;
 
 pub const CURRENT_VERSION_IMPL: VarInt = 760;
 

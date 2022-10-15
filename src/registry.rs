@@ -86,6 +86,8 @@ pub trait AsyncPacketRegistry<Context, Output> {
         transport_context: &'a mut TransportProcessorContext,
         data: Vec<u8>,
     ) -> std::result::Result<BoxFuture<'a, Output>, RegistryError>;
+
+    fn staple(&self) -> VarInt;
 }
 
 impl std::error::Error for RegistryError {}
@@ -127,10 +129,6 @@ impl<Context: Send + Sync, Output: Send + Sync> MappedAsyncPacketRegistry<Contex
             staple: protocol_version,
             mappings: HashMap::new(),
         }
-    }
-
-    pub fn staple(&self) -> VarInt {
-        self.staple
     }
 }
 
@@ -201,6 +199,10 @@ impl<Context: Send + Sync, Output: Send + Sync> AsyncPacketRegistry<Context, Out
             }
         }
     }
+
+    fn staple(&self) -> VarInt {
+        self.staple
+    }
 }
 
 macro_rules! async_reg_ref_impl {
@@ -215,6 +217,10 @@ macro_rules! async_reg_ref_impl {
                 data: Vec<u8>,
             ) -> std::result::Result<BoxFuture<'a, Output>, RegistryError> {
                 MappedAsyncPacketRegistry::execute(self, context, transport_context, data)
+            }
+
+            fn staple(&self) -> VarInt {
+                MappedAsyncPacketRegistry::staple(self)
             }
         }
     };

@@ -1,8 +1,8 @@
 use drax::extension::{read_var_int_sync, size_var_int, write_var_int_sync};
 use drax::transport::{DraxTransport, Result, TransportProcessorContext};
+use drax::SizedVec;
 use std::fmt::{Display, Formatter};
 use std::io::Cursor;
-use drax::SizedVec;
 
 #[derive(Debug)]
 pub enum BitStorage {
