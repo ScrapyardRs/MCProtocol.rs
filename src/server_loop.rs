@@ -143,7 +143,8 @@ impl<
                                 AuthError::RegistryError(mut writer, _) => writer,
                             })
                             .write_packet(Disconnect {
-                                reason: error_message,
+                                reason: Some(error_message),
+                                legacy_reason: None,
                             })
                             .await?;
 

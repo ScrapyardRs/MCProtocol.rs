@@ -13,7 +13,6 @@ pub struct GameProfile {
     pub name: String,
     pub properties: SizedVec<Property>,
 }
-
 #[derive(
     drax_derive::DraxTransport, serde_derive::Deserialize, serde_derive::Serialize, Debug, Clone,
 )]
@@ -213,26 +212,26 @@ pub mod login {
 
     pub mod sb {
         use drax::Maybe;
+        use drax::ShortSizedVec;
         use drax::SizedVec;
         use drax::VarInt;
         use uuid::Uuid;
 
         use super::MojangIdentifiedKey;
 
+        use crate::registry::ProtocolVersionKey;
+
         #[derive(drax_derive::DraxTransport, Debug)]
+        #[drax(include = {ProtocolVersionKey as protocol_version})]
         pub struct LoginStart {
             #[drax(limit = 16)]
             pub name: String,
+            #[drax(skip_if = {protocol_version < 759})]
             pub sig_data: Maybe<MojangIdentifiedKey>,
+            #[drax(skip_if = {protocol_version < 759})]
             pub sig_holder: Maybe<Uuid>,
         }
         
-        #[derive(drax_derive::DraxTransport, Debug)]
-        pub struct LegacyLoginStart {
-            #[drax(limit = 16)]
-            pub name: String,
-        }
-
         #[derive(drax_derive::DraxTransport, Debug)]
         #[drax(key = {match bool})]
         pub enum EncryptionResponseData {
@@ -246,25 +245,19 @@ pub mod login {
         }
 
         #[derive(drax_derive::DraxTransport, Debug)]
+        #[drax(include = {ProtocolVersionKey as protocol_version})]
         pub struct EncryptionResponse {
             pub shared_secret: SizedVec<u8>,
-            pub response_data: EncryptionResponseData,
+            #[drax(skip_if = {protocol_version < 759})]
+            pub response_data: Option<EncryptionResponseData>,
+            #[drax(skip_if = {protocol_version > 758 || protocol_version < 47})]
+            pub verify_token: Option<SizedVec<u8>>,
+            #[drax(skip_if = {protocol_version > 5})]
+            pub legacy_shared_secret: Option<ShortSizedVec<u8>>,
+            #[drax(skip_if = {protocol_version > 5})]
+            pub legacy_verify_token: Option<ShortSizedVec<u8>>,
         }
         
-        #[derive(drax_derive::DraxTransport, Debug)]
-        pub struct LegacyEncryptionResponse {
-            pub shared_secret: SizedVec<u8>,
-            pub verify_token: SizedVec<u8>,
-        }
-
-        #[derive(drax_derive::DraxTransport, Debug)]
-        pub struct OldEncryptionResponse {
-            pub shared_secret_length: u16,
-            pub shared_secret: Vec<u8>,
-            pub verify_token_length: u16,
-            pub verify_token: Vec<u8>,
-        }
-
         #[derive(drax_derive::DraxTransport, Debug)]
         pub struct LoginPluginResponse {
             pub message_id: VarInt,
@@ -276,19 +269,10 @@ pub mod login {
 
         crate::import_registrations! {
             LoginStart {
-                759..CURRENT_VERSION_IMPL -> 0x00,
-            }
-            LegacyLoginStart {
-                0..758 -> 0x00,
+                0..CURRENT_VERSION_IMPL -> 0x00,
             }
             EncryptionResponse {
-                759..CURRENT_VERSION_IMPL -> 0x01,
-            }
-            LegacyEncryptionResponse {
-                47..758 -> 0x01,
-            }
-            OldEncryptionResponse {
-                0..5 -> 0x01,
+                0..CURRENT_VERSION_IMPL -> 0x01,
             }
             LoginPluginResponse {
                 382..CURRENT_VERSION_IMPL -> 0x02,
@@ -298,34 +282,31 @@ pub mod login {
 
     pub mod cb {
         use crate::protocol::{GameProfile, Property};
-        use drax::{Maybe, SizedVec};
+        use crate::registry::ProtocolVersionKey;
+        use drax::{Maybe, SizedVec, ShortSizedVec};
 
         #[derive(drax_derive::DraxTransport, Debug)]
+        #[drax(include = {ProtocolVersionKey as protocol_version})]
         pub struct Disconnect {
-            #[drax(json = 262144)]
-            pub reason: crate::chat::Chat,
-        }
-        
-        #[derive(drax_derive::DraxTransport, Debug)]
-        pub struct LegacyDisconnect {
-            pub reason: String,
+            #[drax(json = 262144, skip_if = {protocol_version < 47})]
+            pub reason: Option<crate::chat::Chat>,
+            #[drax(skip_if = {protocol_version > 5})]
+            pub legacy_reason: Option<String>,
         }
 
         #[derive(drax_derive::DraxTransport, Debug)]
+        #[drax(include = {ProtocolVersionKey as protocol_version})]
         pub struct EncryptionRequest {
             #[drax(limit = 20)]
             pub server_id: String,
-            pub public_key: SizedVec<u8>,
-            pub verify_token: SizedVec<u8>,
-        }
-
-        #[derive(drax_derive::DraxTransport, Debug)]
-        pub struct LegacyEncryptionRequest {
-            pub server_id: String,
-            pub public_key_length: u16,
-            pub public_key: Vec<u8>,
-            pub verify_token_length: u16,
-            pub verify_token: Vec<u8>,
+            #[drax(skip_if = {protocol_version < 47})]
+            pub public_key: Option<SizedVec<u8>>,
+            #[drax(skip_if = {protocol_version < 47})]
+            pub verify_token: Option<SizedVec<u8>>,
+            #[drax(skip_if = {protocol_version > 5})]
+            pub legacy_public_key: Option<ShortSizedVec<u8>>,
+            #[drax(skip_if = {protocol_version > 5})]
+            pub legacy_verify_token: Option<ShortSizedVec<u8>>,
         }
 
         #[derive(drax_derive::DraxTransport, Debug)]
@@ -346,34 +327,25 @@ pub mod login {
         }
 
         #[derive(drax_derive::DraxTransport, Debug)]
+        #[drax(include = {ProtocolVersionKey as protocol_version})]
         pub struct LoginSuccess {
-            pub uuid: uuid::Uuid,
+            #[drax(skip_if = {protocol_version < 707})]
+            pub uuid: Option<uuid::Uuid>,
+            #[drax(limit = 16, skip_if = {protocol_version > 706})]
+            pub legacy_uuid: Option<String>,
             #[drax(limit = 16)]
             pub username: String,
-            pub properties: SizedVec<LoginProperty>,
-        }
-        
-        #[derive(drax_derive::DraxTransport, Debug)]
-        pub struct LegacyLoginSuccess {
-            pub uuid: uuid::Uuid,
-            #[drax(limit = 16)]
-            pub username: String,
-        }
-        
-        #[derive(drax_derive::DraxTransport, Debug)]
-        pub struct OldLoginSuccess {
-            #[drax(limit = 36)]
-            pub uuid: String,
-            #[drax(limit = 16)]
-            pub username: String,
+            #[drax(skip_if = {protocol_version < 759})]
+            pub properties: Option<SizedVec<LoginProperty>>,
         }
 
         impl From<&GameProfile> for LoginSuccess {
             fn from(profile: &GameProfile) -> Self {
                 Self {
-                    uuid: profile.id.clone(),
+                    uuid: Some(profile.id.clone()),
+                    legacy_uuid: None,
                     username: profile.name.clone(),
-                    properties: profile.properties.iter().map(LoginProperty::from).collect(),
+                    properties: Some(profile.properties.iter().map(LoginProperty::from).collect()),
                 }
             }
         }
@@ -394,25 +366,13 @@ pub mod login {
 
         crate::import_registrations! {
             Disconnect {
-                47..CURRENT_VERSION_IMPL -> 0x00,
-            }
-            LegacyDisconnect {
-                0..5 -> 0x00,
+                0..CURRENT_VERSION_IMPL -> 0x00,
             }
             EncryptionRequest {
-                47..CURRENT_VERSION_IMPL -> 0x01,
-            }
-            LegacyEncryptionRequest {
-                0..5 -> 0x01,
+                0..CURRENT_VERSION_IMPL -> 0x01,
             }
             LoginSuccess {
                 759..CURRENT_VERSION_IMPL -> 0x02,
-            }
-            LegacyLoginSuccess {
-                707..758 -> 0x02,
-            }
-            OldLoginSuccess {
-                0..706 -> 0x02,
             }
             SetCompression {
                 47..CURRENT_VERSION_IMPL -> 0x03,

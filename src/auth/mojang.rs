@@ -238,8 +238,10 @@ async fn login_start<W: AsyncWrite + Send + Sync + Unpin + Sized>(
 
     let encryption_request = EncryptionRequest {
         server_id: format!(""),
-        public_key: key_der,
-        verify_token: Vec::from(verify_token),
+        public_key: Some(key_der),
+        verify_token: Some(Vec::from(verify_token)),
+        legacy_public_key: None,
+        legacy_verify_token: None,
     };
 
     if let Err(err) = context.writer.write_packet(encryption_request).await {
@@ -275,13 +277,13 @@ async fn encryption_response<W: AsyncWrite + Send + Sync + Unpin + Sized>(
 
     if let Some(key) = context.key.as_ref() {
         match encryption_response.response_data {
-            EncryptionResponseData::VerifyTokenData(_) => {
+            Some(EncryptionResponseData::VerifyTokenData(_)) => {
                 return AuthFunctionResponse::ValidationError(ValidationError::InvalidData);
             }
-            EncryptionResponseData::MessageSignature {
+            Some(EncryptionResponseData::MessageSignature {
                 salt,
                 message_signature,
-            } => {
+            }) => {
                 use sha2::Digest;
                 let message = expected_verify.clone();
 
@@ -304,10 +306,11 @@ async fn encryption_response<W: AsyncWrite + Send + Sync + Unpin + Sized>(
                     );
                 }
             }
+            _ => {}
         }
     } else {
         match encryption_response.response_data {
-            EncryptionResponseData::VerifyTokenData(data) => {
+            Some(EncryptionResponseData::VerifyTokenData(data)) => {
                 let resp = match server_key.decrypt(crate::crypto::Padding::PKCS1v15Encrypt, &data)
                 {
                     Ok(resp) => resp,
@@ -319,9 +322,10 @@ async fn encryption_response<W: AsyncWrite + Send + Sync + Unpin + Sized>(
                     return AuthFunctionResponse::ValidationError(ValidationError::VerifyMismatch);
                 }
             }
-            EncryptionResponseData::MessageSignature { .. } => {
+            Some(EncryptionResponseData::MessageSignature { .. }) => {
                 return AuthFunctionResponse::ValidationError(ValidationError::InvalidData);
             }
+            _ => {}
         }
     }
 
