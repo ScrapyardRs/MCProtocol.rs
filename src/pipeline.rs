@@ -294,6 +294,10 @@ pub struct MinecraftProtocolWriter<W: Send + Sync> {
 }
 
 impl<W: Send + Sync> MinecraftProtocolWriter<W> {
+    pub fn protocol_version(&self) -> VarInt {
+        self.protocol_version
+    }
+
     pub fn update_protocol(&mut self, protocol: VarInt) {
         self.protocol_version = protocol;
     }
