@@ -1,3 +1,10 @@
+use drax::{nbt::CompoundTag, Maybe, SizedVec, VarInt};
+use uuid::Uuid;
+
+use crate::chat::Chat;
+
+use super::{chunk::Chunk, GameProfile};
+
 const MULTIPLY_DE_BRUIJN_BIT_POSITION: [i32; 32] = [
     0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16, 7, 26,
     12, 18, 6, 11, 5, 10, 9,
@@ -112,20 +119,101 @@ impl RelativeArgument {
     }
 }
 
+#[derive(drax_derive::DraxTransport, Debug)]
+pub struct BlockEntityInfo {
+    pub packed_xz: u8,
+    pub y: i16,
+    pub block_type: VarInt,
+    pub tag: CompoundTag,
+}
+
+#[derive(drax_derive::DraxTransport, Debug)]
+pub struct LevelChunkData {
+    pub chunk: Chunk,
+    pub block_entities: SizedVec<BlockEntityInfo>,
+}
+
+#[derive(drax_derive::DraxTransport, Debug)]
+pub struct LightUpdateData {
+    pub trust_edges: bool,
+    pub sky_y_mask: SizedVec<u64>,
+    pub block_y_mask: SizedVec<u64>,
+    pub empty_sky_y_mask: SizedVec<u64>,
+    pub empty_block_y_mask: SizedVec<u64>,
+    pub sky_updates: SizedVec<SizedVec<u8>>,
+    pub block_updates: SizedVec<SizedVec<u8>>,
+}
+
+#[derive(drax_derive::DraxTransport, Debug)]
+#[drax(key = {match u8})]
+pub enum GameType {
+    Survival,
+    Creative,
+    Adventure,
+    Spectator,
+    #[drax(key = {255u8})]
+    None,
+}
+
+#[derive(drax_derive::DraxTransport, Debug)]
+pub struct AddPlayerEntry {
+    pub profile: GameProfile,
+    pub game_type: GameType,
+    pub latency: VarInt,
+    #[drax(json = 262144)]
+    pub display_name: Maybe<Chat>,
+    pub key_data: Maybe<crate::protocol::login::MojangIdentifiedKey>,
+}
+
+#[derive(drax_derive::DraxTransport, Debug)]
+pub struct UpdateGameModeEntry {
+    pub uuid: Uuid,
+    pub game_type: GameType,
+}
+
+#[derive(drax_derive::DraxTransport, Debug)]
+pub struct UpdateLatencyEntry {
+    pub uuid: Uuid,
+    pub latency: VarInt,
+}
+
+#[derive(drax_derive::DraxTransport, Debug)]
+pub struct UpdateDisplayNameEntry {
+    pub uuid: Uuid,
+    #[drax(json = 32767)]
+    pub display_name: Maybe<Chat>,
+}
+
+#[derive(drax_derive::DraxTransport, Debug)]
+pub struct RemovePlayerEntry {
+    pub uuid: Uuid,
+}
+
+#[derive(drax_derive::BitMapTransport, Debug)]
+pub struct PlayerAbilitiesBitMap {
+    pub invulnerable: bool,
+    pub flying: bool,
+    pub can_fly: bool,
+    pub instant_build: bool,
+}
+
 pub mod sb {}
 
 pub mod cb {
     use drax::{nbt::CompoundTag, Maybe, SizedVec, VarInt};
-    use uuid::Uuid;
 
-    use crate::protocol::bit_storage::BitStorage;
-    use crate::protocol::chunk::Chunk;
-    use crate::{chat::Chat, commands::Command, protocol::GameProfile};
+    use crate::{chat::Chat, commands::Command};
 
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct DeclareCommands {
         pub commands: SizedVec<Command>,
         pub root_index: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct PluginMessage {
+        pub identifier: String,
+        pub data: Vec<u8>,
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
@@ -140,53 +228,17 @@ pub mod cb {
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
-    pub struct BlockEntityInfo {
-        pub packed_xz: u8,
-        pub y: i16,
-        pub block_type: VarInt,
-        pub tag: CompoundTag,
-    }
-
-    #[derive(drax_derive::DraxTransport, Debug)]
-    pub struct LevelChunkData {
-        pub chunk: Chunk,
-        pub block_entities: SizedVec<BlockEntityInfo>,
-    }
-
-    #[derive(drax_derive::DraxTransport, Debug)]
-    pub struct LightUpdateData {
-        pub trust_edges: bool,
-        pub sky_y_mask: SizedVec<u64>,
-        pub block_y_mask: SizedVec<u64>,
-        pub empty_sky_y_mask: SizedVec<u64>,
-        pub empty_block_y_mask: SizedVec<u64>,
-        pub sky_updates: SizedVec<SizedVec<u8>>,
-        pub block_updates: SizedVec<SizedVec<u8>>,
-    }
-
-    #[derive(drax_derive::DraxTransport, Debug)]
     pub struct LevelChunkWithLight {
-        pub chunk_data: LevelChunkData,
-        pub light_data: LightUpdateData,
-    }
-
-    #[derive(drax_derive::DraxTransport, Debug)]
-    #[drax(key = {match u8})]
-    pub enum GameType {
-        Survival,
-        Creative,
-        Adventure,
-        Spectator,
-        #[drax(key = {255u8})]
-        None,
+        pub chunk_data: super::LevelChunkData,
+        pub light_data: super::LightUpdateData,
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct JoinGame {
         pub player_id: i32,
         pub hardcore: bool,
-        pub game_type: GameType,
-        pub previous_game_type: GameType,
+        pub game_type: super::GameType,
+        pub previous_game_type: super::GameType,
         pub levels: SizedVec<String>,
         pub codec: CompoundTag,
         pub dimension_type: String,
@@ -202,63 +254,21 @@ pub mod cb {
         pub last_death_location: Maybe<super::BlockPos>,
     }
 
-    #[derive(drax_derive::BitMapTransport, Debug)]
-    pub struct PlayerAbilitiesBitMap {
-        pub invulnerable: bool,
-        pub flying: bool,
-        pub can_fly: bool,
-        pub instant_build: bool,
-    }
-
     #[derive(drax_derive::DraxTransport, Debug)]
     pub struct PlayerAbilities {
-        pub player_abilities_map: PlayerAbilitiesBitMap,
+        pub player_abilities_map: super::PlayerAbilitiesBitMap,
         pub flying_speed: f32,
         pub fov_modifier: f32,
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
-    pub struct AddPlayerEntry {
-        pub profile: GameProfile,
-        pub game_type: GameType,
-        pub latency: VarInt,
-        #[drax(json = 262144)]
-        pub display_name: Maybe<Chat>,
-        pub key_data: Maybe<crate::protocol::login::MojangIdentifiedKey>,
-    }
-
-    #[derive(drax_derive::DraxTransport, Debug)]
-    pub struct UpdateGameModeEntry {
-        pub uuid: Uuid,
-        pub game_type: GameType,
-    }
-
-    #[derive(drax_derive::DraxTransport, Debug)]
-    pub struct UpdateLatencyEntry {
-        pub uuid: Uuid,
-        pub latency: VarInt,
-    }
-
-    #[derive(drax_derive::DraxTransport, Debug)]
-    pub struct UpdateDisplayNameEntry {
-        pub uuid: Uuid,
-        #[drax(json = 32767)]
-        pub display_name: Maybe<Chat>,
-    }
-
-    #[derive(drax_derive::DraxTransport, Debug)]
-    pub struct RemovePlayerEntry {
-        pub uuid: Uuid,
-    }
-
-    #[derive(drax_derive::DraxTransport, Debug)]
     #[drax(key = {match VarInt})]
     pub enum PlayerInfo {
-        AddPlayer(SizedVec<AddPlayerEntry>),
-        UpdateGameMode(SizedVec<UpdateGameModeEntry>),
-        UpdateLatency(SizedVec<UpdateLatencyEntry>),
-        UpdateDisplayName(SizedVec<UpdateDisplayNameEntry>),
-        RemovePlayer(SizedVec<RemovePlayerEntry>),
+        AddPlayer(SizedVec<super::AddPlayerEntry>),
+        UpdateGameMode(SizedVec<super::UpdateGameModeEntry>),
+        UpdateLatency(SizedVec<super::UpdateLatencyEntry>),
+        UpdateDisplayName(SizedVec<super::UpdateDisplayNameEntry>),
+        RemovePlayer(SizedVec<super::RemovePlayerEntry>),
     }
 
     #[derive(drax_derive::DraxTransport, Debug)]
@@ -278,6 +288,10 @@ pub mod cb {
     crate::import_registrations! {
         DeclareCommands {
             CURRENT_VERSION_IMPL -> 0xF,
+        }
+
+        PluginMessage {
+            CURRENT_VERSION_IMPL -> 0x16,
         }
 
         Disconnect {
