@@ -408,7 +408,7 @@ pub async fn auth_client<
     handshake: Handshake,
     auth_config: Arc<AuthConfiguration>,
 ) -> Result<AuthenticatedClient<R, W>, AuthError<W>> {
-    let mut auth_pipeline = auth_pipeline.clear_registry();
+    let mut auth_pipeline = auth_pipeline.rewrite_registry(handshake.protocol_version);
     auth_pipeline.clear_data();
     auth_pipeline.register(pin_fut!(login_start));
     auth_pipeline.register(pin_fut!(encryption_response));

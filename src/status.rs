@@ -56,7 +56,7 @@ pub async fn handle_status_client<
     handshake: Handshake,
     status_responder: Arc<Func>,
 ) -> Result<(), RegistryError> {
-    let mut status_pipeline = status_pipeline.clear_registry();
+    let mut status_pipeline = status_pipeline.rewrite_registry(handshake.protocol_version);
 
     let protocol_version = handshake.protocol_version;
 
