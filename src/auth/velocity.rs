@@ -237,10 +237,11 @@ async fn handle_plugin_response<W: AsyncWrite + Send + Sync + Unpin + Sized>(
     }
 
     use sha2::digest::Mac;
-    let hmac: HmacSha256 =
+    let mut hmac: HmacSha256 =
         HmacSha256::new_from_slice(ctx.secret_key.as_bytes()).expect("Hmac keys are any length.");
     let hmac_sig = &login_plugin_response.data[0..32];
     let remaining_data = &login_plugin_response.data[32..];
+    hmac.update(remaining_data);
     let mut data_cursor = Cursor::new(remaining_data);
 
     let data = <VelocityForwardingData as drax::transport::DraxTransport>::read_from_transport(
@@ -253,6 +254,10 @@ async fn handle_plugin_response<W: AsyncWrite + Send + Sync + Unpin + Sized>(
         "Verifying {:?} against secret {:?}",
         hmac_sig,
         ctx.secret_key.as_bytes()
+    );
+    log::info!(
+        "Got actual slice: {:?}",
+        hmac.clone().finalize().into_bytes()
     );
     hmac.verify_slice(hmac_sig)?;
 
