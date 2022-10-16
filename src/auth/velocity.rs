@@ -240,7 +240,6 @@ async fn handle_plugin_response<W: AsyncWrite + Send + Sync + Unpin + Sized>(
     let hmac: HmacSha256 =
         HmacSha256::new_from_slice(ctx.secret_key.as_bytes()).expect("Hmac keys are any length.");
     let hmac_sig = &login_plugin_response.data[0..32];
-    hmac.verify_slice(hmac_sig)?;
     let remaining_data = &login_plugin_response.data[32..];
     let mut data_cursor = Cursor::new(remaining_data);
 
@@ -248,6 +247,14 @@ async fn handle_plugin_response<W: AsyncWrite + Send + Sync + Unpin + Sized>(
         &mut TransportProcessorContext::new(),
         &mut data_cursor,
     )?;
+
+    log::info!("Got true data: {:?}", data);
+    log::info!(
+        "Verifying {:?} against secret {:?}",
+        hmac_sig,
+        ctx.secret_key.as_bytes()
+    );
+    hmac.verify_slice(hmac_sig)?;
 
     let (address, profile, mojang_key) = match data {
         VelocityForwardingData::__Illegal => return Err(VelocityAuthError::InvalidState),

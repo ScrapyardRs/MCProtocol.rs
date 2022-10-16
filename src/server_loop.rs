@@ -179,6 +179,7 @@ impl<
                     {
                         Ok(client) => client,
                         Err(mut err) => {
+                            log::warn!("Encountered error during login. {}", err);
                             return err.disconnect_client_for_error().await.map_err(From::from);
                         }
                     };
@@ -196,6 +197,7 @@ impl<
                     {
                         Ok(client) => client,
                         Err(mut err) => {
+                            log::warn!("Encountered error during login. {}", err);
                             return err.disconnect_client_for_error().await.map_err(From::from);
                         }
                     };
