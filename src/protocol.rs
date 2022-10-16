@@ -48,10 +48,38 @@ pub mod handshaking {
             pub next_state: NextState,
         }
 
+        #[derive(drax_derive::DraxTransport, Debug, Clone)]
+        pub struct UnlimitedAddressHandshake {
+            pub protocol_version: VarInt,
+            pub server_address: String,
+            pub server_port: u16,
+            pub next_state: NextState,
+        }
+
+        impl From<UnlimitedAddressHandshake> for Handshake {
+            fn from(value: UnlimitedAddressHandshake) -> Self {
+                let UnlimitedAddressHandshake {
+                    protocol_version,
+                    server_address,
+                    server_port,
+                    next_state,
+                } = value;
+                Self {
+                    protocol_version,
+                    server_address,
+                    server_port,
+                    next_state,
+                }
+            }
+        }
+
         use crate::registry::UNKNOWN_VERSION;
 
         crate::import_registrations! {
             Handshake {
+                UNKNOWN_VERSION -> 0x00,
+            }
+            UnlimitedAddressHandshake {
                 UNKNOWN_VERSION -> 0x00,
             }
         }
@@ -151,17 +179,64 @@ pub mod status {
 }
 
 pub mod login {
+    use std::error::Error;
+    use std::fmt::{Display, Formatter};
+    use std::io::{Cursor, Write};
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-    use drax::SizedVec;
+    use drax::transport::{DraxTransport, TransportProcessorContext};
+    use drax::{Maybe, SizedVec};
+    use uuid::Uuid;
 
-    use crate::crypto::{key_from_der, MCPublicKey};
+    use crate::crypto::{key_from_der, CapturedRsaError, MCPublicKey};
+    use crate::registry::RegistryError;
 
-    #[derive(drax_derive::DraxTransport, Debug, Clone)]
+    #[derive(drax_derive::DraxTransport, Debug, Clone, Eq, PartialEq)]
     pub struct MojangIdentifiedKey {
         pub timestamp: u64,
         pub public_key: SizedVec<u8>,
         pub signature: SizedVec<u8>,
+    }
+
+    #[derive(Debug)]
+    pub enum VerifyError {
+        CapturedRsa(crate::crypto::CapturedRsaError),
+        DraxTransport(drax::transport::Error),
+    }
+
+    impl Error for VerifyError {}
+
+    impl Display for VerifyError {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            match self {
+                VerifyError::CapturedRsa(err) => write!(f, "{}", err),
+                VerifyError::DraxTransport(err) => write!(f, "{}", err),
+            }
+        }
+    }
+
+    impl From<drax::transport::Error> for VerifyError {
+        fn from(value: drax::transport::Error) -> Self {
+            Self::DraxTransport(value)
+        }
+    }
+
+    impl From<CapturedRsaError> for VerifyError {
+        fn from(value: CapturedRsaError) -> Self {
+            Self::CapturedRsa(value)
+        }
+    }
+
+    impl From<rsa::errors::Error> for VerifyError {
+        fn from(value: rsa::errors::Error) -> Self {
+            Self::CapturedRsa(CapturedRsaError::RsaError(value))
+        }
+    }
+
+    impl From<std::io::Error> for VerifyError {
+        fn from(value: std::io::Error) -> Self {
+            Self::DraxTransport(drax::transport::Error::TokioError(value))
+        }
     }
 
     impl MojangIdentifiedKey {
@@ -170,23 +245,43 @@ pub mod login {
             SystemTime::now() > key_instant
         }
 
+        pub fn verify_incoming_data(
+            &self,
+            verify_against: &MCPublicKey,
+            holder: &Uuid,
+        ) -> Result<(), VerifyError> {
+            let mut ctx = TransportProcessorContext::new();
+            let mut verify_data = Cursor::new(Vec::<u8>::with_capacity(self.public_key.len() + 24));
+            holder.write_to_transport(&mut ctx, &mut verify_data)?;
+            self.timestamp
+                .write_to_transport(&mut ctx, &mut verify_data)?;
+            verify_data.write_all(&self.public_key)?;
+            crate::crypto::verify_signature(
+                Some(crate::crypto::SHA1_HASH),
+                verify_against,
+                &self.signature,
+                crate::crypto::sha1_message(&verify_data.into_inner()).as_slice(),
+            )?;
+            Ok(())
+        }
+
         pub fn verify_signature(
             &self,
             verify_against: &MCPublicKey,
-        ) -> Result<(), crate::crypto::CapturedRsaError> {
+        ) -> Result<(), CapturedRsaError> {
             let encoded_pem = crate::crypto::encode_key_pem(self.timestamp, &self.public_key)
-                .map_err(crate::crypto::CapturedRsaError::SpecificationError)?;
+                .map_err(CapturedRsaError::SpecificationError)?;
             crate::crypto::verify_signature(
                 Some(crate::crypto::SHA1_HASH),
                 verify_against,
                 &self.signature,
                 crate::crypto::sha1_message(encoded_pem.as_bytes()).as_slice(),
             )
-            .map_err(crate::crypto::CapturedRsaError::RsaError)
+            .map_err(CapturedRsaError::RsaError)
         }
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Eq, PartialEq)]
     pub struct IdentifiedKey {
         public_key: MCPublicKey,
     }
@@ -209,6 +304,14 @@ pub mod login {
                 signature,
                 data,
             )
+        }
+    }
+
+    impl TryFrom<&MojangIdentifiedKey> for IdentifiedKey {
+        type Error = crate::crypto::CapturedRsaError;
+
+        fn try_from(value: &MojangIdentifiedKey) -> Result<Self, Self::Error> {
+            Self::new(&value.public_key)
         }
     }
 

@@ -1,34 +1,27 @@
-use super::MOJANG_KEY;
-use crate::auth::AuthConfiguration;
-use crate::chat::Chat;
-use crate::crypto::{private_key_to_der, sha1_message, CapturedRsaError, MCPublicKey};
-use crate::pin_fut;
-use crate::pipeline::{
-    AsyncMinecraftProtocolPipeline, BlankAsyncProtocolPipeline, BlankMcReadWrite,
-    MinecraftProtocolWriter,
-};
-use crate::protocol::handshaking::sb::Handshake;
-use crate::protocol::login::cb::{EncryptionRequest, LoginSuccess, SetCompression};
-use crate::protocol::login::sb::{EncryptionResponse, EncryptionResponseData, LoginStart};
-use crate::protocol::login::{IdentifiedKey, MojangIdentifiedKey};
-use crate::protocol::GameProfile;
-use crate::registry::{
-    MCPacketWriter, MappedAsyncPacketRegistry, MutAsyncPacketRegistry, RegistryError,
-};
+use std::fmt::{Debug, Display, Formatter};
+use std::sync::Arc;
+
 use cipher::NewCipher;
-use drax::transport::encryption::{DecryptRead, EncryptedWriter, EncryptionStream};
-use drax::transport::{DraxTransport, TransportProcessorContext};
-use drax::{Maybe, VarInt};
+use drax::transport::encryption::EncryptionStream;
+use drax::VarInt;
 use num_bigint::BigInt;
 use rand::RngCore;
 use reqwest::StatusCode;
-use std::fmt::{Debug, Display, Formatter};
-use std::future::Future;
-use std::io::{Cursor, Write};
-use std::marker::PhantomData;
-use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;
+
+use crate::auth::AuthConfiguration;
+use crate::crypto::{private_key_to_der, CapturedRsaError};
+use crate::pin_fut;
+use crate::pipeline::{AsyncMinecraftProtocolPipeline, MinecraftProtocolWriter};
+use crate::protocol::handshaking::sb::Handshake;
+use crate::protocol::login::cb::{EncryptionRequest, SetCompression};
+use crate::protocol::login::sb::{EncryptionResponse, EncryptionResponseData, LoginStart};
+use crate::protocol::login::{IdentifiedKey, MojangIdentifiedKey, VerifyError};
+use crate::protocol::GameProfile;
+use crate::registry::{MappedAsyncPacketRegistry, MutAsyncPacketRegistry, RegistryError};
+
+use super::MOJANG_KEY;
 
 pub enum AuthClientState {
     ExpectingLoginStart,
@@ -51,7 +44,7 @@ pub enum KeyError {
     NoHolder,
     NoKey,
     MojangKeyServerError,
-    InvalidKey(rsa::errors::Error),
+    InvalidKey(CapturedRsaError),
     InvalidIdentifiedKey(CapturedRsaError),
 }
 
@@ -168,51 +161,21 @@ async fn login_start<W: AsyncWrite + Send + Sync + Unpin + Sized>(
             if sig_data.has_expired() {
                 return AuthFunctionResponse::KeyError(KeyError::Expired);
             }
+
             let mojang_der = match crate::crypto::key_from_der(MOJANG_KEY) {
                 Ok(key) => key,
                 Err(_) => return AuthFunctionResponse::KeyError(KeyError::MojangKeyServerError),
             };
-            let mut verify_data =
-                Cursor::new(Vec::<u8>::with_capacity(sig_data.public_key.len() + 24));
 
-            log::trace!("Verify Length: {}", sig_data.public_key.len() + 24);
-
-            let mut ctx = TransportProcessorContext::new();
-            macro_rules! catch_drax {
-                ($($tt:tt)*) => {
-                    match $($tt)* {
-                        Ok(x) => x,
-                        Err(err) => return AuthFunctionResponse::TransportError(err),
-                    }
+            match sig_data.verify_incoming_data(&mojang_der, sig_holder) {
+                Err(VerifyError::CapturedRsa(err)) => {
+                    return AuthFunctionResponse::KeyError(KeyError::InvalidKey(err))
                 }
+                Err(VerifyError::DraxTransport(err)) => {
+                    return AuthFunctionResponse::TransportError(err)
+                }
+                _ => (),
             }
-            catch_drax!(sig_holder.write_to_transport(&mut ctx, &mut verify_data));
-            catch_drax!(sig_data
-                .timestamp
-                .write_to_transport(&mut ctx, &mut verify_data));
-            if let Err(err) = verify_data.write_all(&sig_data.public_key) {
-                return AuthFunctionResponse::TransportError(drax::transport::Error::TokioError(
-                    err,
-                ));
-            }
-
-            let key_verify_inner = verify_data.into_inner();
-            log::trace!(
-                "Verifying signature: (len: {}) {:?}",
-                key_verify_inner.len(),
-                key_verify_inner
-            );
-            if let Err(err) = crate::crypto::verify_signature(
-                Some(crate::crypto::SHA1_HASH),
-                &mojang_der,
-                &sig_data.signature,
-                sha1_message(&key_verify_inner).as_slice(),
-            ) {
-                log::trace!("Invalid key!");
-                return AuthFunctionResponse::KeyError(KeyError::InvalidKey(err));
-            }
-
-            log::trace!("Building identified key.");
 
             match IdentifiedKey::new(&sig_data.public_key) {
                 Ok(identified_key) => Some(identified_key),
@@ -386,16 +349,6 @@ async fn encryption_response<W: AsyncWrite + Send + Sync + Unpin + Sized>(
     }
 }
 
-pub struct AuthenticatedClient<
-    R: AsyncRead + Send + Sync + Unpin + Sized,
-    W: AsyncWrite + Send + Sync + Unpin + Sized,
-> {
-    pub read_write: BlankMcReadWrite<DecryptRead<R>, EncryptedWriter<W>>,
-    pub profile: GameProfile,
-    pub key: Option<IdentifiedKey>,
-    pub mojang_key: Option<MojangIdentifiedKey>,
-}
-
 pub async fn auth_client<
     IC: Send + Sync,
     IO: Send + Sync,
@@ -407,7 +360,7 @@ pub async fn auth_client<
     write: W,
     handshake: Handshake,
     auth_config: Arc<AuthConfiguration>,
-) -> Result<AuthenticatedClient<R, W>, AuthError<W>> {
+) -> Result<super::AuthenticatedClient<R, W>, AuthError<W>> {
     let mut auth_pipeline = auth_pipeline.rewrite_registry(handshake.protocol_version);
     auth_pipeline.clear_data();
     auth_pipeline.register(pin_fut!(login_start));
@@ -479,7 +432,7 @@ pub async fn auth_client<
                         }
                     }
                 };
-            };
+            }
 
             let read_stream = stream!(shared_secret, context.writer);
             let write_stream = stream!(shared_secret, context.writer);
@@ -518,7 +471,7 @@ pub async fn auth_client<
         }
     };
 
-    Ok(AuthenticatedClient {
+    Ok(super::AuthenticatedClient {
         read_write: (
             new_read.with_registry(MappedAsyncPacketRegistry::new(handshake.protocol_version)),
             new_write,
@@ -526,5 +479,6 @@ pub async fn auth_client<
         profile,
         key,
         mojang_key,
+        overridden_address: None,
     })
 }

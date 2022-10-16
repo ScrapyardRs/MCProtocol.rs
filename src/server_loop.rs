@@ -1,9 +1,10 @@
-use crate::auth::mojang::{AuthError, AuthenticatedClient};
-use crate::auth::AuthConfiguration;
+use crate::auth::mojang::AuthError;
+use crate::auth::velocity::VelocityAuthError;
+use crate::auth::{bungee, velocity, AuthConfiguration, AuthenticatedClient};
 use crate::chat::Chat;
 use crate::pin_fut;
 use crate::pipeline::AsyncMinecraftProtocolPipeline;
-use crate::protocol::handshaking::sb::{Handshake, NextState};
+use crate::protocol::handshaking::sb::{Handshake, NextState, UnlimitedAddressHandshake};
 use crate::protocol::login::cb::Disconnect;
 use crate::registry::RegistryError;
 use crate::status::StatusBuilder;
@@ -12,9 +13,12 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-#[derive(serde_derive::Deserialize, Clone, Copy)]
+#[derive(serde_derive::Deserialize, Clone)]
+#[serde(untagged)]
 pub enum IncomingAuthenticationOption {
     MOJANG,
+    BUNGEE,
+    VELOCITY { secret_key: String },
 }
 
 #[derive(serde_derive::Deserialize)]
@@ -82,6 +86,13 @@ impl<
         handshake
     }
 
+    async fn handle_unlimited_address_handshake(
+        _: &mut (),
+        handshake: UnlimitedAddressHandshake,
+    ) -> Handshake {
+        handshake.into()
+    }
+
     pub async fn accept_client(
         arc_self: Arc<Self>,
         ctx: Ctx,
@@ -92,8 +103,13 @@ impl<
 
         let mut handshake_pipeline = AsyncMinecraftProtocolPipeline::empty(read);
         log::trace!("Registering handshake.");
-        handshake_pipeline.register(pin_fut!(Self::handle_handshake));
+        if let IncomingAuthenticationOption::BUNGEE = arc_self.auth_option {
+            handshake_pipeline.register(pin_fut!(Self::handle_unlimited_address_handshake));
+        } else {
+            handshake_pipeline.register(pin_fut!(Self::handle_handshake));
+        }
         let handshake: Handshake = handshake_pipeline.execute_next_packet(&mut ()).await?;
+
         match handshake.next_state {
             NextState::Status => {
                 log::trace!("Reading status client: {:?}", handshake);
@@ -115,7 +131,7 @@ impl<
                 res?;
                 Ok(())
             }
-            NextState::Login => match arc_self.auth_option {
+            NextState::Login => match &arc_self.auth_option {
                 IncomingAuthenticationOption::MOJANG => {
                     log::trace!("Logging client in.");
                     let authenticated_client = match crate::auth::mojang::auth_client(
@@ -151,6 +167,39 @@ impl<
                         }
                     };
                     ((&arc_self.client_acceptor)(ctx, authenticated_client)).await
+                }
+                IncomingAuthenticationOption::BUNGEE => {
+                    let client = match bungee::auth_client(
+                        handshake_pipeline,
+                        write,
+                        handshake,
+                        arc_self.auth_config.clone(),
+                    )
+                    .await
+                    {
+                        Ok(client) => client,
+                        Err(mut err) => {
+                            return err.disconnect_client_for_error().await.map_err(From::from);
+                        }
+                    };
+                    ((&arc_self.client_acceptor)(ctx, client)).await
+                }
+                IncomingAuthenticationOption::VELOCITY { secret_key } => {
+                    let client = match velocity::auth_client(
+                        handshake_pipeline,
+                        write,
+                        handshake,
+                        arc_self.auth_config.clone(),
+                        secret_key.to_string(),
+                    )
+                    .await
+                    {
+                        Ok(client) => client,
+                        Err(mut err) => {
+                            return err.disconnect_client_for_error().await.map_err(From::from);
+                        }
+                    };
+                    ((&arc_self.client_acceptor)(ctx, client)).await
                 }
             },
             _ => Ok(()),

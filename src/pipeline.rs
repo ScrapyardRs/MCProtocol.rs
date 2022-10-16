@@ -159,6 +159,27 @@ impl<
         }
     }
 
+    pub fn noop_decryption(
+        self,
+    ) -> AsyncMinecraftProtocolPipeline<DecryptRead<R>, Context, PacketOutput, Reg> {
+        let Self {
+            read,
+            registry,
+            processor_context,
+            drax_transport,
+            _phantom_context,
+            _phantom_packet_output,
+        } = self;
+        AsyncMinecraftProtocolPipeline::<DecryptRead<R>, Context, PacketOutput, Reg> {
+            read: DecryptRead::noop(read),
+            registry,
+            processor_context,
+            drax_transport,
+            _phantom_context,
+            _phantom_packet_output,
+        }
+    }
+
     pub async fn execute_next_packet(
         &mut self,
         context: &mut Context,
@@ -382,6 +403,19 @@ impl<W: AsyncWrite + Unpin + Sized + Send + Sync> MinecraftProtocolWriter<W> {
         MinecraftProtocolWriter {
             protocol_version,
             write: EncryptedWriter::new(write, stream),
+            write_pipeline,
+        }
+    }
+
+    pub fn noop_encryption(self) -> MinecraftProtocolWriter<EncryptedWriter<W>> {
+        let Self {
+            protocol_version,
+            write,
+            write_pipeline,
+        } = self;
+        MinecraftProtocolWriter {
+            protocol_version,
+            write: EncryptedWriter::noop(write),
             write_pipeline,
         }
     }
