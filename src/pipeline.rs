@@ -329,6 +329,34 @@ impl<W: Send + Sync> MinecraftProtocolWriter<W> {
     }
 }
 
+pub fn buffer_packet<T: DraxTransport + RegistrationCandidate + Send + Sync + 'static>(
+    packet: &T,
+    protocol_version: VarInt,
+) -> drax::transport::Result<PacketFrame> {
+    let packet_id = match T::scoped_registration(protocol_version) {
+        None => {
+            return drax::transport::Error::cause(format!(
+                "Packet ID not found for protocol version {}. No further information available.",
+                protocol_version
+            ))
+        }
+        Some(packet_id) => packet_id,
+    };
+    let mut context = TransportProcessorContext::new();
+    context.insert_data::<ProtocolVersionKey>(protocol_version);
+
+    let mut packet_buffer = Cursor::new(Vec::with_capacity(
+        packet.precondition_size(&mut context)?
+            + drax::extension::size_var_int(packet_id, &mut context)?,
+    ));
+    drax::extension::write_var_int_sync(packet_id, &mut context, &mut packet_buffer)?;
+    packet.write_to_transport(&mut context, &mut packet_buffer)?;
+    let frame = PacketFrame {
+        data: packet_buffer.into_inner(),
+    };
+    Ok(frame)
+}
+
 impl<W: AsyncWrite + Unpin + Sized + Send + Sync> MinecraftProtocolWriter<W> {
     pub fn from_handshake(write: W, handshake: &Handshake) -> Self {
         Self::from_protocol_version(write, handshake.protocol_version)
@@ -342,39 +370,11 @@ impl<W: AsyncWrite + Unpin + Sized + Send + Sync> MinecraftProtocolWriter<W> {
         }
     }
 
-    pub fn buffer_packet<T: DraxTransport + RegistrationCandidate + Send + Sync + 'static>(
-        packet: &T,
-        protocol_version: VarInt,
-    ) -> drax::transport::Result<PacketFrame> {
-        let packet_id = match T::scoped_registration(protocol_version) {
-            None => {
-                return drax::transport::Error::cause(format!(
-                "Packet ID not found for protocol version {}. No further information available.",
-                protocol_version
-            ))
-            }
-            Some(packet_id) => packet_id,
-        };
-        let mut context = TransportProcessorContext::new();
-        context.insert_data::<ProtocolVersionKey>(protocol_version);
-
-        let mut packet_buffer = Cursor::new(Vec::with_capacity(
-            packet.precondition_size(&mut context)?
-                + drax::extension::size_var_int(packet_id, &mut context)?,
-        ));
-        drax::extension::write_var_int_sync(packet_id, &mut context, &mut packet_buffer)?;
-        packet.write_to_transport(&mut context, &mut packet_buffer)?;
-        let frame = PacketFrame {
-            data: packet_buffer.into_inner(),
-        };
-        Ok(frame)
-    }
-
     pub async fn write_packet<T: DraxTransport + RegistrationCandidate + Send + Sync + 'static>(
         &mut self,
         packet: &T,
     ) -> drax::transport::Result<()> {
-        self.write_buffered_packet(Self::buffer_packet(packet, self.protocol_version)?)
+        self.write_buffered_packet(buffer_packet(packet, self.protocol_version)?)
             .await
     }
 
