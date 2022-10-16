@@ -4,6 +4,7 @@ use crate::protocol::login::{IdentifiedKey, MojangIdentifiedKey};
 use crate::protocol::GameProfile;
 use drax::transport::encryption::{DecryptRead, EncryptedWriter};
 use tokio::io::{AsyncRead, AsyncWrite};
+use uuid::Uuid;
 
 pub mod bungee;
 pub mod mojang;
@@ -25,6 +26,7 @@ pub struct AuthenticatedClient<
     pub read_write: BlankMcReadWrite<DecryptRead<R>, EncryptedWriter<W>>,
     pub profile: GameProfile,
     pub key: Option<IdentifiedKey>,
+    pub sig_holder: Option<Uuid>,
     pub mojang_key: Option<MojangIdentifiedKey>,
     pub overridden_address: Option<String>,
 }

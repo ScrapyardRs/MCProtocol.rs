@@ -135,7 +135,7 @@ pub enum AuthFunctionResponse {
         mojang_key: Option<MojangIdentifiedKey>,
         key: Option<IdentifiedKey>,
         name: String,
-        expected_uuid: Option<Uuid>,
+        sig_holder: Option<Uuid>,
     },
     AuthComplete {
         profile: GameProfile,
@@ -218,7 +218,7 @@ async fn login_start<W: AsyncWrite + Send + Sync + Unpin + Sized>(
         mojang_key: login_start.sig_data,
         key,
         name: login_start.name.clone(),
-        expected_uuid: login_start.sig_holder.as_ref().cloned(),
+        sig_holder: login_start.sig_holder,
     }
 }
 
@@ -378,15 +378,15 @@ pub async fn auth_client<
         Err(err) => return Err(AuthError::RegistryError(context.writer, err)),
     };
 
-    let (expected_uuid, mojang_key) = match matched {
+    let (mojang_key, sig_holder) = match matched {
         AuthFunctionResponse::LoginStartPass {
             mojang_key,
             key,
-            expected_uuid,
+            sig_holder,
             ..
         } => {
             context.key = key;
-            (expected_uuid, mojang_key)
+            (mojang_key, sig_holder)
         }
         AuthFunctionResponse::ValidationError(err) => {
             return Err(AuthError::ValidationError(context.writer, err))
@@ -411,7 +411,7 @@ pub async fn auth_client<
             profile,
             shared_secret,
         } => {
-            if let Some(expected_uuid) = expected_uuid.as_ref() {
+            if let Some(expected_uuid) = sig_holder.as_ref() {
                 if profile.id.ne(expected_uuid) {
                     return Err(AuthError::ValidationError(
                         context.writer,
@@ -480,5 +480,6 @@ pub async fn auth_client<
         key,
         mojang_key,
         overridden_address: None,
+        sig_holder,
     })
 }

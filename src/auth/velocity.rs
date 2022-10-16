@@ -45,6 +45,7 @@ enum AuthFunctionResponse {
     LoginStartSuccess {
         key: Option<IdentifiedKey>,
         mojang_key: Option<MojangIdentifiedKey>,
+        sig_holder: Option<Uuid>,
     },
     PluginMessageSuccess {
         address: String,
@@ -221,6 +222,7 @@ async fn handle_login_start<W: AsyncWrite + Send + Sync + Unpin + Sized>(
     Ok(AuthFunctionResponse::LoginStartSuccess {
         key,
         mojang_key: login_start.sig_data,
+        sig_holder: login_start.sig_holder,
     })
 }
 
@@ -232,7 +234,10 @@ async fn handle_plugin_response<W: AsyncWrite + Send + Sync + Unpin + Sized>(
         return Err(VelocityAuthError::InvalidState);
     }
 
-    if !login_plugin_response.successful || login_plugin_response.data.len() < 33 {
+    if login_plugin_response.message_id != -1
+        || !login_plugin_response.successful
+        || login_plugin_response.data.len() < 33
+    {
         return Err(VelocityAuthError::InvalidState);
     }
 
@@ -309,24 +314,29 @@ pub async fn auth_client<
         writer: MinecraftProtocolWriter::from_handshake(write, &handshake),
     };
 
-    let (key, mojang_key_init) = match auth_pipeline.execute_next_packet(&mut context).await {
-        Ok(Ok(AuthFunctionResponse::LoginStartSuccess { key, mojang_key })) => (key, mojang_key),
-        Ok(Ok(AuthFunctionResponse::PluginMessageSuccess { .. })) => {
-            return Err(VelocityAuthError::InvalidState.with_ctx(context.writer))
-        }
-        Err(err) => {
-            return Err(VelocityAuthErrorWithWriter {
-                writer: context.writer,
-                error: VelocityAuthError::RegistryError(err),
-            });
-        }
-        Ok(Err(err)) => {
-            return Err(VelocityAuthErrorWithWriter {
-                writer: context.writer,
-                error: err,
-            });
-        }
-    };
+    let (key, mojang_key_init, sig_holder) =
+        match auth_pipeline.execute_next_packet(&mut context).await {
+            Ok(Ok(AuthFunctionResponse::LoginStartSuccess {
+                key,
+                mojang_key,
+                sig_holder,
+            })) => (key, mojang_key, sig_holder),
+            Ok(Ok(AuthFunctionResponse::PluginMessageSuccess { .. })) => {
+                return Err(VelocityAuthError::InvalidState.with_ctx(context.writer))
+            }
+            Err(err) => {
+                return Err(VelocityAuthErrorWithWriter {
+                    writer: context.writer,
+                    error: VelocityAuthError::RegistryError(err),
+                });
+            }
+            Ok(Err(err)) => {
+                return Err(VelocityAuthErrorWithWriter {
+                    writer: context.writer,
+                    error: err,
+                });
+            }
+        };
 
     let (address, profile, mojang_key) = match auth_pipeline.execute_next_packet(&mut context).await
     {
@@ -365,6 +375,7 @@ pub async fn auth_client<
         ),
         profile,
         key,
+        sig_holder,
         mojang_key,
         overridden_address: Some(address),
     })

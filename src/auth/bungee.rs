@@ -17,6 +17,7 @@ use uuid::{Error, Uuid};
 enum AuthFunctionResponse {
     LoginStartSuccess {
         key: Option<IdentifiedKey>,
+        sig_holder: Option<Uuid>,
         mojang_key: Option<MojangIdentifiedKey>,
         name: String,
     },
@@ -170,6 +171,7 @@ async fn handle_login_start(
         key,
         mojang_key: login_start.sig_data,
         name: login_start.name,
+        sig_holder: login_start.sig_holder,
     })
 }
 
@@ -230,22 +232,24 @@ pub async fn auth_client<
 
     let mut context = AuthClientContext { auth_config };
 
-    let (key, mojang_key, name) = match auth_pipeline.execute_next_packet(&mut context).await {
-        Ok(Ok(AuthFunctionResponse::LoginStartSuccess {
-            key,
-            mojang_key,
-            name,
-        })) => (key, mojang_key, name),
-        Err(err) => {
-            return Err(BungeeAuthErrorWithWriter {
-                writer,
-                error: BungeeAuthError::RegistryError(err),
-            });
-        }
-        Ok(Err(err)) => {
-            return Err(BungeeAuthErrorWithWriter { writer, error: err });
-        }
-    };
+    let (key, mojang_key, name, sig_holder) =
+        match auth_pipeline.execute_next_packet(&mut context).await {
+            Ok(Ok(AuthFunctionResponse::LoginStartSuccess {
+                key,
+                mojang_key,
+                name,
+                sig_holder,
+            })) => (key, mojang_key, name, sig_holder),
+            Err(err) => {
+                return Err(BungeeAuthErrorWithWriter {
+                    writer,
+                    error: BungeeAuthError::RegistryError(err),
+                });
+            }
+            Ok(Err(err)) => {
+                return Err(BungeeAuthErrorWithWriter { writer, error: err });
+            }
+        };
 
     let profile = GameProfile {
         id,
@@ -260,6 +264,7 @@ pub async fn auth_client<
         ),
         profile,
         key,
+        sig_holder,
         mojang_key,
         overridden_address: Some(address.to_string()),
     })
