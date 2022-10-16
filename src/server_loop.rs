@@ -158,7 +158,7 @@ impl<
                                 AuthError::TransportError(mut writer, _) => writer,
                                 AuthError::RegistryError(mut writer, _) => writer,
                             })
-                            .write_packet(Disconnect {
+                            .write_packet(&Disconnect {
                                 reason: error_message,
                             })
                             .await?;

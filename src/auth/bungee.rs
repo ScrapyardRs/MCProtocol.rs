@@ -40,7 +40,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + Sized> BungeeAuthErrorWithWriter<W> {
         error_message.push_extra(prompt);
         error_message.push_extra(Chat::literal(format!("{}", self.error)));
         self.writer
-            .write_packet(Disconnect {
+            .write_packet(&Disconnect {
                 reason: error_message,
             })
             .await

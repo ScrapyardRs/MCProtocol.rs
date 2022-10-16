@@ -93,7 +93,7 @@ pub async fn handle_status_client<
                 favicon,
                 previews_chat: Some(false),
             };
-            packet_writer.write_packet(Response(status)).await?;
+            packet_writer.write_packet(&Response(status)).await?;
         }
         StatusFunctionResponse::PingForward { .. } => {
             return Err(RegistryError::DraxTransportError(
@@ -113,7 +113,7 @@ pub async fn handle_status_client<
             ))
         }
         StatusFunctionResponse::PingForward { start_time } => {
-            packet_writer.write_packet(Pong { start_time }).await?;
+            packet_writer.write_packet(&Pong { start_time }).await?;
         }
     }
 

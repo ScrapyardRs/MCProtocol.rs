@@ -205,7 +205,7 @@ async fn login_start<W: AsyncWrite + Send + Sync + Unpin + Sized>(
         verify_token: Vec::from(verify_token),
     };
 
-    if let Err(err) = context.writer.write_packet(encryption_request).await {
+    if let Err(err) = context.writer.write_packet(&encryption_request).await {
         return AuthFunctionResponse::TransportError(err);
     }
 
@@ -459,7 +459,7 @@ pub async fn auth_client<
 
     if auth_config.compression_threshold >= 0 {
         if let Err(err) = new_write
-            .write_packet(SetCompression {
+            .write_packet(&SetCompression {
                 threshold: auth_config.compression_threshold as VarInt,
             })
             .await

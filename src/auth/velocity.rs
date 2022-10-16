@@ -79,7 +79,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + Sized> VelocityAuthErrorWithWriter<W>
         error_message.push_extra(prompt);
         error_message.push_extra(Chat::literal(format!("{}", self.error)));
         self.writer
-            .write_packet(Disconnect {
+            .write_packet(&Disconnect {
                 reason: error_message,
             })
             .await
@@ -211,7 +211,7 @@ async fn handle_login_start<W: AsyncWrite + Send + Sync + Unpin + Sized>(
     };
 
     ctx.writer
-        .write_packet(LoginPluginRequest {
+        .write_packet(&LoginPluginRequest {
             message_id: -1,
             channel: "velocity:player_info".to_string(),
             data: vec![MODERN_FORWARDING_COMPATIBILITY],

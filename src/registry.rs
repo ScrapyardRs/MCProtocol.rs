@@ -16,31 +16,6 @@ use drax::VarInt;
 pub const UNKNOWN_VERSION: VarInt = -2;
 pub const ALL_VERSIONS: VarInt = -1;
 
-pub struct MCPacketWriter;
-impl ChainProcessor for MCPacketWriter {
-    type Input = (VarInt, Box<dyn DraxTransport + Send + Sync>);
-    type Output = PacketFrame;
-
-    fn process(
-        &self,
-        context: &mut TransportProcessorContext,
-        (packet_id, transport): Self::Input,
-    ) -> Result<Self::Output>
-    where
-        Self::Input: Sized,
-    {
-        let mut packet_buffer = Cursor::new(Vec::with_capacity(
-            transport.precondition_size(context)?
-                + drax::extension::size_var_int(packet_id, context)?,
-        ));
-        drax::extension::write_var_int_sync(packet_id, context, &mut packet_buffer)?;
-        transport.write_to_transport(context, &mut packet_buffer)?;
-        Ok(PacketFrame {
-            data: packet_buffer.into_inner(),
-        })
-    }
-}
-
 pub struct ProtocolVersionKey;
 impl drax::prelude::Key for ProtocolVersionKey {
     type Value = VarInt;
