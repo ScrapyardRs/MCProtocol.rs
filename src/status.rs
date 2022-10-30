@@ -44,16 +44,20 @@ pub struct StatusBuilder {
 }
 
 pub async fn handle_status_client<
+    OC: Send + Sync,
+    OO: Send + Sync,
     R: AsyncRead + Unpin + Sized + Send + Sync,
     W: AsyncWrite + Unpin + Sized + Send + Sync,
     Func: (Fn(Handshake) -> BoxFuture<'static, StatusBuilder>) + 'static,
-    Reg: MutAsyncPacketRegistry<(), StatusFunctionResponse> + Send + Sync,
+    Reg: MutAsyncPacketRegistry<OC, OO> + Send + Sync,
 >(
-    mut status_pipeline: AsyncMinecraftProtocolPipeline<R, (), StatusFunctionResponse, Reg>,
+    status_pipeline: AsyncMinecraftProtocolPipeline<R, OC, OO, Reg>,
     write: W,
     handshake: Handshake,
     status_responder: Arc<Func>,
 ) -> Result<(), RegistryError> {
+    let mut status_pipeline = status_pipeline.rewrite_registry(handshake.protocol_version);
+
     let protocol_version = handshake.protocol_version;
 
     log::trace!("Creating status pipeline");
@@ -89,7 +93,7 @@ pub async fn handle_status_client<
                 favicon,
                 previews_chat: Some(false),
             };
-            packet_writer.write_packet(Response(status)).await?;
+            packet_writer.write_packet(&Response(status)).await?;
         }
         StatusFunctionResponse::PingForward { .. } => {
             return Err(RegistryError::DraxTransportError(
@@ -109,7 +113,7 @@ pub async fn handle_status_client<
             ))
         }
         StatusFunctionResponse::PingForward { start_time } => {
-            packet_writer.write_packet(Pong { start_time }).await?;
+            packet_writer.write_packet(&Pong { start_time }).await?;
         }
     }
 

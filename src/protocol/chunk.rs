@@ -12,23 +12,16 @@ use tokio::io::AsyncWriteExt;
 use crate::protocol::bit_storage::{BitSetValidationError, BitStorage};
 use crate::protocol::play::ceil_log_2;
 
-enum Either<L, R> {
-    Left(L),
-    Right(R),
+pub enum Index {
+    NewSize(u8),
+    CurrentIndex(i32),
 }
 
-impl<L, R> Either<L, R> {
-    pub fn assert_left(self) -> L {
+impl Index {
+    pub fn current(self) -> i32 {
         match self {
-            Either::Left(left) => left,
-            Either::Right(_) => unreachable!(),
-        }
-    }
-
-    pub fn assert_right(self) -> R {
-        match self {
-            Either::Left(_) => unreachable!(),
-            Either::Right(right) => right,
+            Index::NewSize(_) => panic!("Unexpected resize."),
+            Index::CurrentIndex(idx) => idx,
         }
     }
 }
@@ -103,24 +96,24 @@ impl Palette {
         }
     }
 
-    fn id_for(&self, block_id: VarInt) -> Either<i32, u8> {
+    fn id_for(&self, block_id: VarInt) -> Index {
         match self {
             Palette::SingleValue { block_type_id } => {
                 if *block_type_id == block_id {
-                    Either::Left(0)
+                    Index::CurrentIndex(0)
                 } else {
-                    Either::Right(2)
+                    Index::NewSize(2)
                 }
             }
             Palette::Indirect { palette, .. } => {
                 for (index, x) in palette.iter().enumerate() {
                     if *x == block_id {
-                        return Either::Left(index as i32);
+                        return Index::CurrentIndex(index as i32);
                     }
                 }
-                return Either::Right(palette.len() as u8 + 1);
+                return Index::NewSize(palette.len() as u8 + 1);
             }
-            Palette::Direct => Either::Left(block_id.into()),
+            Palette::Direct => Index::CurrentIndex(block_id.into()),
         }
     }
 
@@ -175,8 +168,8 @@ impl PaletteContainer {
         block_id: VarInt,
     ) -> std::result::Result<VarInt, BitSetValidationError> {
         match self.palette.id_for(block_id) {
-            Either::Left(id) => self.storage.get_and_set(index, id).map(Into::into),
-            Either::Right(new_size) => {
+            Index::CurrentIndex(id) => self.storage.get_and_set(index, id).map(Into::into),
+            Index::NewSize(new_size) => {
                 let bits_per_entry = strategy.bit_size(new_size);
                 let new_palette = match new_size {
                     0 | 1 => unreachable!(),
@@ -190,7 +183,7 @@ impl PaletteContainer {
                 let mut new_bitset = BitStorage::new(strategy.locked_entry_count(), bits_per_entry);
                 for x in 0..(new_size as i32 - 1) {
                     let out = self.storage.get(x)?;
-                    new_bitset.set(x, new_palette.id_for(out.into()).assert_left())?;
+                    new_bitset.set(x, new_palette.id_for(out.into()).current())?;
                 }
                 self.palette = new_palette;
                 self.storage = new_bitset;

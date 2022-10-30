@@ -9,6 +9,7 @@ pub const MC_BUFFER_CAPACITY: usize = 2097154; // static value from wiki.vg
 
 pub mod auth;
 pub mod chat;
+pub mod commands;
 pub mod crypto;
 pub mod pipeline;
 pub mod prelude;
@@ -16,4 +17,3 @@ pub mod protocol;
 pub mod registry;
 pub mod server_loop;
 pub mod status;
-pub mod commands;

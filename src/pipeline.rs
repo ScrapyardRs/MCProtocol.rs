@@ -1,8 +1,8 @@
 use crate::prelude::BoxFuture;
 use crate::protocol::handshaking::sb::Handshake;
 use crate::registry::{
-    AsyncPacketRegistry, MCPacketWriter, MappedAsyncPacketRegistry, MutAsyncPacketRegistry,
-    ProtocolVersionKey, RegistrationCandidate, RegistryError, UNKNOWN_VERSION,
+    AsyncPacketRegistry, MappedAsyncPacketRegistry, MutAsyncPacketRegistry, ProtocolVersionKey,
+    RegistrationCandidate, RegistryError, UNKNOWN_VERSION,
 };
 use drax::prelude::{AsyncRead, BytesMut};
 use drax::transport::buffered_reader::DraxTransportPipeline;
@@ -61,31 +61,6 @@ impl<R: AsyncRead + Send + Sync, Context: Send + Sync, PacketOutput: Send + Sync
         }
     }
 
-    pub fn rewrite_registry<NC: Send + Sync, NP: Send + Sync>(
-        self,
-        protocol_version: VarInt,
-    ) -> AsyncMinecraftProtocolPipeline<R, NC, NP, MappedAsyncPacketRegistry<NC, NP>> {
-        let Self {
-            read,
-            registry,
-            processor_context,
-            drax_transport,
-            ..
-        } = self;
-
-        let mut context = TransportProcessorContext::new();
-        context.insert_data::<ProtocolVersionKey>(protocol_version);
-
-        AsyncMinecraftProtocolPipeline {
-            read,
-            registry: MappedAsyncPacketRegistry::new(protocol_version),
-            processor_context: context,
-            drax_transport,
-            _phantom_context: Default::default(),
-            _phantom_packet_output: Default::default(),
-        }
-    }
-
     pub fn from_handshake(read: R, handshake: &Handshake) -> Self {
         Self::from_protocol_version(read, handshake.protocol_version)
     }
@@ -117,6 +92,49 @@ impl<
         Reg: AsyncPacketRegistry<Context, PacketOutput> + Send + Sync,
     > AsyncMinecraftProtocolPipeline<R, Context, PacketOutput, Reg>
 {
+    pub fn rewrite_registry<NC: Send + Sync, NP: Send + Sync>(
+        self,
+        protocol_version: VarInt,
+    ) -> AsyncMinecraftProtocolPipeline<R, NC, NP, MappedAsyncPacketRegistry<NC, NP>> {
+        let Self {
+            read,
+            drax_transport,
+            ..
+        } = self;
+
+        let mut context = TransportProcessorContext::new();
+        context.insert_data::<ProtocolVersionKey>(protocol_version);
+
+        AsyncMinecraftProtocolPipeline {
+            read,
+            registry: MappedAsyncPacketRegistry::new(protocol_version),
+            processor_context: context,
+            drax_transport,
+            _phantom_context: Default::default(),
+            _phantom_packet_output: Default::default(),
+        }
+    }
+
+    pub fn clear_registry<NC: Send + Sync, NP: Send + Sync>(
+        self,
+    ) -> AsyncMinecraftProtocolPipeline<R, NC, NP, MappedAsyncPacketRegistry<NC, NP>> {
+        let Self {
+            read,
+            registry,
+            processor_context,
+            drax_transport,
+            ..
+        } = self;
+        AsyncMinecraftProtocolPipeline {
+            read,
+            registry: MappedAsyncPacketRegistry::new(registry.staple()),
+            processor_context,
+            drax_transport,
+            _phantom_context: Default::default(),
+            _phantom_packet_output: Default::default(),
+        }
+    }
+
     pub fn enable_decryption(
         mut self,
         stream: EncryptionStream,
@@ -131,6 +149,27 @@ impl<
         } = self;
         AsyncMinecraftProtocolPipeline::<DecryptRead<R>, Context, PacketOutput, Reg> {
             read: DecryptRead::new(read, stream),
+            registry,
+            processor_context,
+            drax_transport,
+            _phantom_context,
+            _phantom_packet_output,
+        }
+    }
+
+    pub fn noop_decryption(
+        self,
+    ) -> AsyncMinecraftProtocolPipeline<DecryptRead<R>, Context, PacketOutput, Reg> {
+        let Self {
+            read,
+            registry,
+            processor_context,
+            drax_transport,
+            _phantom_context,
+            _phantom_packet_output,
+        } = self;
+        AsyncMinecraftProtocolPipeline::<DecryptRead<R>, Context, PacketOutput, Reg> {
+            read: DecryptRead::noop(read),
             registry,
             processor_context,
             drax_transport,
@@ -274,6 +313,10 @@ pub struct MinecraftProtocolWriter<W: Send + Sync> {
 }
 
 impl<W: Send + Sync> MinecraftProtocolWriter<W> {
+    pub fn protocol_version(&self) -> VarInt {
+        self.protocol_version
+    }
+
     pub fn update_protocol(&mut self, protocol: VarInt) {
         self.protocol_version = protocol;
     }
@@ -284,6 +327,34 @@ impl<W: Send + Sync> MinecraftProtocolWriter<W> {
                 Arc::new(share_link!(FrameEncoder::new(threshold), FrameSizeAppender));
         }
     }
+}
+
+pub fn buffer_packet<T: DraxTransport + RegistrationCandidate + Send + Sync + 'static>(
+    packet: &T,
+    protocol_version: VarInt,
+) -> drax::transport::Result<PacketFrame> {
+    let packet_id = match T::scoped_registration(protocol_version) {
+        None => {
+            return drax::transport::Error::cause(format!(
+                "Packet ID not found for protocol version {}. No further information available.",
+                protocol_version
+            ))
+        }
+        Some(packet_id) => packet_id,
+    };
+    let mut context = TransportProcessorContext::new();
+    context.insert_data::<ProtocolVersionKey>(protocol_version);
+
+    let mut packet_buffer = Cursor::new(Vec::with_capacity(
+        packet.precondition_size(&mut context)?
+            + drax::extension::size_var_int(packet_id, &mut context)?,
+    ));
+    drax::extension::write_var_int_sync(packet_id, &mut context, &mut packet_buffer)?;
+    packet.write_to_transport(&mut context, &mut packet_buffer)?;
+    let frame = PacketFrame {
+        data: packet_buffer.into_inner(),
+    };
+    Ok(frame)
 }
 
 impl<W: AsyncWrite + Unpin + Sized + Send + Sync> MinecraftProtocolWriter<W> {
@@ -299,38 +370,12 @@ impl<W: AsyncWrite + Unpin + Sized + Send + Sync> MinecraftProtocolWriter<W> {
         }
     }
 
-    pub fn buffer_packet<T: DraxTransport + RegistrationCandidate + Send + Sync + 'static>(
-        packet: T,
-        protocol_version: VarInt,
-    ) -> drax::transport::Result<PacketFrame> {
-        let packet_id = match T::scoped_registration(protocol_version) {
-            None => {
-                return drax::transport::Error::cause(format!(
-                "Packet ID not found for protocol version {}. No further information available.",
-                protocol_version
-            ))
-            }
-            Some(packet_id) => packet_id,
-        };
-        let mut context = TransportProcessorContext::new();
-        context.insert_data::<ProtocolVersionKey>(protocol_version);
-        let frame = MCPacketWriter.process(&mut context, (packet_id, Box::new(packet)))?;
-        Ok(frame)
-    }
-
     pub async fn write_packet<T: DraxTransport + RegistrationCandidate + Send + Sync + 'static>(
         &mut self,
-        packet: T,
+        packet: &T,
     ) -> drax::transport::Result<()> {
-        let protocol_version = self.protocol_version;
-        let mut context = TransportProcessorContext::new();
-        context.insert_data::<ProtocolVersionKey>(protocol_version);
-        let packet_buffer = Self::buffer_packet(packet, protocol_version)?;
-        let packet_buffer = self.write_pipeline.process(&mut context, packet_buffer)?;
-        self.write
-            .write_all(&packet_buffer)
+        self.write_buffered_packet(buffer_packet(packet, self.protocol_version)?)
             .await
-            .map_err(drax::transport::Error::TokioError)
     }
 
     pub async fn write_buffered_packet(
@@ -358,6 +403,19 @@ impl<W: AsyncWrite + Unpin + Sized + Send + Sync> MinecraftProtocolWriter<W> {
         MinecraftProtocolWriter {
             protocol_version,
             write: EncryptedWriter::new(write, stream),
+            write_pipeline,
+        }
+    }
+
+    pub fn noop_encryption(self) -> MinecraftProtocolWriter<EncryptedWriter<W>> {
+        let Self {
+            protocol_version,
+            write,
+            write_pipeline,
+        } = self;
+        MinecraftProtocolWriter {
+            protocol_version,
+            write: EncryptedWriter::noop(write),
             write_pipeline,
         }
     }
