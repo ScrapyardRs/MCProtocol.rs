@@ -1,3 +1,5 @@
+use drax::{nbt::CompoundTag, VarInt, Maybe};
+
 const MULTIPLY_DE_BRUIJN_BIT_POSITION: [i32; 32] = [
     0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16, 7, 26,
     12, 18, 6, 11, 5, 10, 9,
@@ -112,7 +114,560 @@ impl RelativeArgument {
     }
 }
 
-pub mod sb {}
+#[derive(drax_derive::DraxTransport, Debug)]
+pub struct Identifier {
+    pub data: String,
+}
+
+impl Identifier {
+    pub fn new(data: String) -> Identifier {
+        Identifier { data: String::from("minecraft:") + &data }
+    }
+}
+
+#[derive(Debug)]
+pub struct ItemStack {
+    pub id: Maybe<VarInt>,
+    pub count: Maybe<u8>,
+    pub tag: Maybe<CompoundTag>,
+}
+
+impl drax::transport::DraxTransport for ItemStack {
+    fn write_to_transport(
+        &self,
+        context: &mut drax::transport::TransportProcessorContext,
+        writer: &mut std::io::Cursor<Vec<u8>>,
+    ) -> drax::transport::Result<()> {
+        if let (Some(id), Some(count)) = (self.id, self.count) {
+            if count == 0 {
+                false.write_to_transport(context, writer)
+            } else {
+                true.write_to_transport(context, writer)?;
+                id.write_to_transport(context, writer)?;
+                count.write_to_transport(context, writer)?;
+                match &self.tag {
+                    Some(n) => drax::nbt::write_nbt(&n, writer),
+                    None => (0 as u8).write_to_transport(context, writer)
+                }
+            }
+        } else {
+            false.write_to_transport(context, writer)
+        }
+    }
+    fn read_from_transport<R: std::io::Read>(
+        context: &mut drax::transport::TransportProcessorContext,
+        read: &mut R,
+    ) -> drax::transport::Result<Self>
+    where
+        Self: Sized,
+    {
+        let present = bool::read_from_transport(context, read)?;
+        if present {
+            let id = VarInt::read_from_transport(context, read)?;
+            let count = u8::read_from_transport(context, read)?;
+            let tag = drax::nbt::read_nbt(read, 32767)?;
+            Ok(ItemStack { id: Some(id), count: Some(count), tag })
+        } else {
+            Ok(ItemStack {
+                id: None,
+                count: None,
+                tag: None,
+            })
+        }
+    }
+    fn precondition_size(
+        &self,
+        context: &mut drax::transport::TransportProcessorContext,
+    ) -> drax::transport::Result<usize> {
+        let mut size: usize = 0;
+        if let (Some(id), Some(count)) = (self.id, self.count) {
+            if count == 0 {
+                return Ok(1 as usize);
+            } else {
+                size += drax::transport::DraxTransport::precondition_size(&id, context)?;
+                size += 1;
+                if let Some(tag) = &self.tag {
+                    size += drax::nbt::size_nbt(&tag);
+                }
+                Ok(size)
+            }
+        } else {
+            Ok(1 as usize)
+        }
+    }
+}
+
+pub mod sb {
+    use drax::VarLong;
+    use drax::{nbt::CompoundTag, Maybe, SizedVec, VarInt};
+    use uuid::Uuid;
+
+    use crate::protocol::chunk::Chunk;
+    use crate::{chat::Chat, commands::Command, protocol::GameProfile};
+    use crate::protocol::bit_storage::BitStorage;
+
+    use super::{BlockPos, Identifier, ItemStack};
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct AcceptTeleportation {
+        pub id: VarInt,
+    }
+    
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct BlockEntityTagQuery {
+        pub id: VarInt,
+        pub location: BlockPos,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct ChangeDifficulty {
+        pub difficulty: u8,
+    }
+
+    // TODO: chat packets
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct ContainerButtonClick {
+        pub window_id: u8,
+        pub button_id: u8,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct ContainerClick {
+        pub window_id: u8,
+        pub state_id: VarInt,
+        pub slot: i16,
+        pub button: u8,
+        pub mode: VarInt,
+        pub slots_array: SizedVec<ItemStack>,
+        pub carried_item: ItemStack
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct ContainerClose {
+        pub window_id: u8,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct PluginMessage {
+        pub channel: Identifier,
+        pub data: Vec<u8>,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct EditBook {
+        pub slot: VarInt,
+        pub count: VarInt,
+        pub entries: Vec<String>,
+        pub titled: bool,
+        pub title: Maybe<String>,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct EntityTagQuery {
+        pub transaction_id: VarInt,
+        pub entity_id: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct Interact {
+        pub id: VarInt,
+        pub interact_type: VarInt,
+        pub target_x: Maybe<f32>,
+        pub target_y: Maybe<f32>,
+        pub target_z: Maybe<f32>,
+        pub hand: Maybe<VarInt>,
+        pub sneaking: bool,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct JigsawGenerate {
+        pub location: BlockPos,
+        pub levels: VarInt,
+        pub keep_jigsaws: bool,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct KeepAlive {
+        pub id: i64,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct LockDifficulty {
+        pub locked: bool,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct MovePlayer {
+        pub x: f64,
+        pub y: f64,
+        pub z: f64,
+        pub on_ground: bool,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct MoveRotatePlayer {
+        pub x: f64,
+        pub y: f64,
+        pub z: f64,
+        pub yaw: f32,
+        pub pitch: f32,
+        pub on_ground: bool,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct RotatePlayer {
+        pub yaw: f32,
+        pub pitch: f32,
+        pub on_ground: bool,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct GroundPlayer {
+        pub on_ground: bool,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct MoveVehicle {
+        pub x: f64,
+        pub y: f64,
+        pub z: f64,
+        pub yaw: f32,
+        pub pitch: f32,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct PaddleBoat {
+        pub left: bool,
+        pub right: bool,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct PickItem {
+        pub slot: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct PlaceRecipe {
+        pub id: u8,
+        pub recipe: Identifier,
+        pub shift_down: bool,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct PlayerAbilities {
+        pub is_flying: u8,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct PlayerAction {
+        pub action: VarInt,
+        pub location: BlockPos,
+        pub direction: u8,
+        pub sequence: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct PlayerCommand {
+        pub id: VarInt,
+        pub action: VarInt,
+        pub jump_boost: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct PlayerInput {
+        pub sideways: f32,
+        pub forward: f32,
+        pub flags: u8,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct Pong {
+        pub id: i32,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct ChangeRecipeBookSettings {
+        pub id: VarInt,
+        pub is_open: bool,
+        pub is_filtering: bool,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct SetSeenRecipe {
+        pub recipe_id: Identifier,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct RenameItem {
+        #[drax(limit = 32767)]
+        pub name: String,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct ResourcePack {
+        pub result: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct SeenAdvancements {
+        pub action: VarInt,
+        pub tab: Maybe<Identifier>,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct SelectTrade {
+        pub slot: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct SetBeaconEffect {
+        pub has_primary_effect: bool,
+        pub primary_effect: VarInt,
+        pub has_secondary_effect: bool,
+        pub secondary_effect: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct SetHeldItem {
+        pub slot: i16,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct ProgramCommandBlock {
+        pub location: BlockPos,
+        #[drax(limit = 32767)]
+        pub command: String,
+        pub mode: VarInt,
+        pub flags: u8,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct ProgramCommandBlockMinecart {
+        pub id: VarInt,
+        #[drax(limit = 32767)]
+        pub command: String,
+        pub track_output: bool,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct SetCreativeModeSlot {
+        pub slot: i16,
+        pub clicked_item: ItemStack,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct ProgramJigsawBlock {
+        pub location: BlockPos,
+        pub name: Identifier,
+        pub target: Identifier,
+        pub pool: Identifier,
+        #[drax(limit = 32767)]
+        pub final_state: String,
+        pub joint_type: String,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct ProgramStructureBlock {
+        pub location: BlockPos,
+        pub action: VarInt,
+        pub mode: VarInt,
+        #[drax(limit = 32767)]
+        pub name: String,
+        pub offset_x: i8,
+        pub offset_y: i8,
+        pub offset_z: i8,
+        pub size_x: i8,
+        pub size_y: i8,
+        pub size_z: i8,
+        pub mirror: VarInt,
+        pub rotation: VarInt,
+        #[drax(limit = 128)]
+        pub metadata: String,
+        pub integrity: f32,
+        pub seed: VarLong,
+        pub flags: u8,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct UpdateSign {
+        pub location: BlockPos,
+        #[drax(limit = 384)]
+        pub line1: String,
+        #[drax(limit = 384)]
+        pub line2: String,
+        #[drax(limit = 384)]
+        pub line3: String,
+        #[drax(limit = 384)]
+        pub line4: String,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct SwingArm {
+        pub hand: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct TeleportToEntity {
+        pub player: Uuid,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct UseItemOn {
+        pub hand: VarInt,
+        pub location: BlockPos,
+        pub face: VarInt,
+        pub cursor_pos_x: f32,
+        pub cursor_pos_y: f32,
+        pub cursor_pos_z: f32,
+        pub inside_block: bool,
+        pub sequence: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct UseItem {
+        pub hand: VarInt,
+        pub sequence: VarInt,
+    }
+
+    use super::super::CURRENT_VERSION_IMPL;
+    
+    crate::import_registrations! {
+        AcceptTeleportation {
+            CURRENT_VERSION_IMPL -> 0x00,
+        }
+        BlockEntityTagQuery {
+            CURRENT_VERSION_IMPL -> 0x01,
+        }
+        ChangeDifficulty {
+            CURRENT_VERSION_IMPL -> 0x02,
+        }
+        // TODO: Chat nonsense
+        ContainerButtonClick {
+            CURRENT_VERSION_IMPL -> 0x0A,
+        }
+        ContainerClick {
+            CURRENT_VERSION_IMPL -> 0x0B,
+        }
+        ContainerClose {
+            CURRENT_VERSION_IMPL -> 0x0C,
+        }
+        PluginMessage {
+            CURRENT_VERSION_IMPL -> 0x0D,
+        }
+        EditBook {
+            CURRENT_VERSION_IMPL -> 0x0E,
+        }
+        EntityTagQuery {
+            CURRENT_VERSION_IMPL -> 0x0F,
+        }
+        Interact {
+            CURRENT_VERSION_IMPL -> 0x10,
+        }
+        JigsawGenerate {
+            CURRENT_VERSION_IMPL -> 0x11,
+        }
+        KeepAlive {
+            CURRENT_VERSION_IMPL -> 0x12,
+        }
+        LockDifficulty {
+            CURRENT_VERSION_IMPL -> 0x13,
+        }
+        MovePlayer {
+            CURRENT_VERSION_IMPL -> 0x14,
+        }
+        MoveRotatePlayer {
+            CURRENT_VERSION_IMPL -> 0x15,
+        }
+        RotatePlayer {
+            CURRENT_VERSION_IMPL -> 0x16,
+        }
+        GroundPlayer {
+            CURRENT_VERSION_IMPL -> 0x17,
+        }
+        MoveVehicle {
+            CURRENT_VERSION_IMPL -> 0x18,
+        }
+        PaddleBoat {
+            CURRENT_VERSION_IMPL -> 0x19,
+        }
+        PickItem {
+            CURRENT_VERSION_IMPL -> 0x1A,
+        }
+        PlaceRecipe{
+            CURRENT_VERSION_IMPL -> 0x1B,
+        }
+        PlayerAbilities {
+            CURRENT_VERSION_IMPL -> 0x1C,
+        }
+        PlayerAction {
+            CURRENT_VERSION_IMPL -> 0x1D,
+        }
+        PlayerCommand {
+            CURRENT_VERSION_IMPL -> 0x1E,
+        }
+        PlayerInput {
+            CURRENT_VERSION_IMPL -> 0x1F,
+        }
+        Pong {
+            CURRENT_VERSION_IMPL -> 0x20,
+        }
+        ChangeRecipeBookSettings {
+            CURRENT_VERSION_IMPL -> 0x21,
+        }
+        SetSeenRecipe {
+            CURRENT_VERSION_IMPL -> 0x22,
+        }
+        RenameItem {
+            CURRENT_VERSION_IMPL -> 0x23,
+        }
+        ResourcePack {
+            CURRENT_VERSION_IMPL -> 0x24,
+        }
+        SeenAdvancements {
+            CURRENT_VERSION_IMPL -> 0x25,
+        }
+        SelectTrade {
+            CURRENT_VERSION_IMPL -> 0x26,
+        }
+        SetBeaconEffect {
+            CURRENT_VERSION_IMPL -> 0x27,
+        }
+        SetHeldItem {
+            CURRENT_VERSION_IMPL -> 0x28,
+        }
+        ProgramCommandBlock {
+            CURRENT_VERSION_IMPL -> 0x29,
+        }
+        ProgramCommandBlockMinecart {
+            CURRENT_VERSION_IMPL -> 0x2A,
+        }
+        SetCreativeModeSlot {
+            CURRENT_VERSION_IMPL -> 0x2B,
+        }
+        ProgramJigsawBlock {
+            CURRENT_VERSION_IMPL -> 0x2C,
+        }
+        ProgramStructureBlock {
+            CURRENT_VERSION_IMPL -> 0x2D,
+        }
+        UpdateSign {
+            CURRENT_VERSION_IMPL -> 0x2E,
+        }
+        SwingArm {
+            CURRENT_VERSION_IMPL -> 0x2F,
+        }
+        TeleportToEntity {
+            CURRENT_VERSION_IMPL -> 0x30,
+        }
+        UseItemOn {
+            CURRENT_VERSION_IMPL -> 0x31,
+        }
+        UseItem {
+            CURRENT_VERSION_IMPL -> 0x32,
+        }
+    }
+}
 
 pub mod cb {
     use drax::{nbt::CompoundTag, Maybe, SizedVec, VarInt};
