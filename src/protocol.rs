@@ -200,7 +200,7 @@ pub mod login {
 
     #[derive(Debug)]
     pub enum VerifyError {
-        CapturedRsa(crate::crypto::CapturedRsaError),
+        CapturedRsa(CapturedRsaError),
         DraxTransport(drax::transport::Error),
     }
 
