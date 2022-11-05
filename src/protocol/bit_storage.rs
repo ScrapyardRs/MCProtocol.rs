@@ -156,12 +156,12 @@ impl BitStorage {
     ) -> std::result::Result<i32, BitSetValidationError> {
         match self {
             BitStorage::ZeroStorage { size, .. } => {
-                Self::validate_n32(0, *size - 1, n)?;
+                Self::validate_n32(0, *size, n)?;
                 Self::validate_n64(0, 0, n2 as i64)?;
                 Ok(0)
             }
             BitStorage::SimpleStorage { size, bits, raw } => {
-                Self::validate_n32(0, *size - 1, n)?;
+                Self::validate_n32(0, *size, n)?;
                 Self::validate_n64(0, Self::mask(*bits), n2 as i64)?;
                 let n3 = Self::cell_index(*bits, n);
                 let larr = raw[n3 as usize] as u64;
@@ -179,12 +179,12 @@ impl BitStorage {
     pub fn set(&mut self, n: i32, n2: i32) -> std::result::Result<(), BitSetValidationError> {
         match self {
             BitStorage::ZeroStorage { size, .. } => {
-                Self::validate_n32(0, *size - 1, n)?;
+                Self::validate_n32(0, *size, n)?;
                 Self::validate_n64(0, 0, n2 as i64)?;
                 Ok(())
             }
             BitStorage::SimpleStorage { size, bits, raw } => {
-                Self::validate_n32(0, *size - 1, n)?;
+                Self::validate_n32(0, *size, n)?;
                 Self::validate_n64(0, Self::mask(*bits), n2 as i64)?;
                 let n3 = Self::cell_index(*bits, n);
                 let larr = raw[n3 as usize];
@@ -201,11 +201,11 @@ impl BitStorage {
     pub fn get(&self, n: i32) -> std::result::Result<i32, BitSetValidationError> {
         match self {
             BitStorage::ZeroStorage { size, .. } => {
-                Self::validate_n32(0, *size - 1, n)?;
+                Self::validate_n32(0, *size, n)?;
                 Ok(0)
             }
             BitStorage::SimpleStorage { size, bits, raw } => {
-                Self::validate_n32(0, *size - 1, n)?;
+                Self::validate_n32(0, *size, n)?;
                 let n3 = Self::cell_index(*bits, n);
                 let larr = raw[n3 as usize] as u64;
                 let n4 = (n - (n3 * Self::values_per_long(*bits))) * *bits;

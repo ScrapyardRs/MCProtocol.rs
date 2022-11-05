@@ -220,6 +220,7 @@ impl PaletteContainer {
                     x => Palette::Direct,
                 };
                 let mut new_bitset = BitStorage::new(strategy.locked_entry_count(), bits_per_entry);
+
                 for idx in 0..self.storage.size() {
                     let out = self.storage.get(idx)?;
                     new_bitset.set(idx, new_palette.id_for(out.into()).current())?;
