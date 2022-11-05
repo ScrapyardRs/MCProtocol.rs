@@ -165,14 +165,17 @@ impl PaletteContainer {
         indexes: Vec<i32>,
         block_id: VarInt,
     ) -> std::result::Result<(), BitSetValidationError> {
+        log::info!("Setting palette blocks: idxs: {:?}, block_id: {}", indexes, block_id);
         match self.palette.id_for(block_id) {
             Index::CurrentIndex(id) => {
+                log::info!("Matched id: {}", id);
                 for index in indexes {
                     self.storage.set(index, id)?;
                 }
                 Ok(())
             }
             Index::NewSize(new_size) => {
+                log::info!("New total size: {}", new_size);
                 let bits_per_entry = strategy.bit_size(new_size);
                 let new_palette = match new_size {
                     0 | 1 => unreachable!(),
@@ -206,9 +209,14 @@ impl PaletteContainer {
         index: i32,
         block_id: VarInt,
     ) -> std::result::Result<VarInt, BitSetValidationError> {
+        log::info!("Setting palette block: idx: {}, block_id: {}", index, block_id);
         match self.palette.id_for(block_id) {
-            Index::CurrentIndex(id) => self.storage.get_and_set(index, id).map(Into::into),
+            Index::CurrentIndex(id) => {
+                log::info!("Matched id: {}", id);
+                self.storage.get_and_set(index, id).map(Into::into)
+            },
             Index::NewSize(new_size) => {
+                log::info!("New total size: {}", new_size);
                 let bits_per_entry = strategy.bit_size(new_size);
                 let new_palette = match new_size {
                     0 | 1 => unreachable!(),
@@ -226,6 +234,7 @@ impl PaletteContainer {
                     new_bitset.set(idx, out)?;
                 }
                 let index_index = new_palette.id_for(block_id).current();
+                log::info!("Single idx idx: {}", index_index);
                 new_bitset.set(index, index_index)?;
 
                 self.palette = new_palette;
