@@ -1,13 +1,10 @@
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read};
 
 use drax::extension::*;
 use drax::nbt::{CompoundTag, Tag};
 use drax::transport::TransportProcessorContext;
 use drax::transport::{DraxTransport, Result};
 use drax::VarInt;
-use serde::de::{EnumAccess, Error, MapAccess, SeqAccess, Visitor};
-use serde::{Deserializer, Serializer};
-use tokio::io::AsyncWriteExt;
 
 use crate::protocol::bit_storage::{BitSetValidationError, BitStorage};
 use crate::protocol::play::ceil_log_2;
@@ -26,7 +23,7 @@ impl Index {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Strategy {
     Section,
     Biome,
@@ -38,7 +35,7 @@ impl Strategy {
     const BIOME_DIRECT_ENTRY_SIZE: i32 = 6;
     const SECTION_DIRECT_ENTRY_SIZE: i32 = 15;
 
-    pub const fn bit_size(&self, given: u8) -> i32 {
+    pub const fn bit_size(self, given: u8) -> i32 {
         match self {
             Strategy::Section => match given {
                 0 => 0,
@@ -50,28 +47,28 @@ impl Strategy {
         }
     }
 
-    pub const fn locked_entry_count(&self) -> i32 {
+    pub const fn locked_entry_count(self) -> i32 {
         match self {
             Strategy::Section => 4096,
             Strategy::Biome => 64,
         }
     }
 
-    pub const fn entry_size(&self) -> i32 {
+    pub const fn entry_size(self) -> i32 {
         match self {
             Strategy::Section => Strategy::SECTION_DIRECT_ENTRY_SIZE,
             Strategy::Biome => Strategy::BIOME_DIRECT_ENTRY_SIZE,
         }
     }
 
-    pub const fn size(&self) -> i32 {
+    pub const fn size(self) -> i32 {
         match self {
             Strategy::Section => 1 << (Strategy::SECTION_SIZE_BITS * 3),
             Strategy::Biome => 1 << (Strategy::BIOME_SIZE_BITS * 3),
         }
     }
 
-    pub const fn retrieve_index(&self, x: i32, y: i32, z: i32) -> i32 {
+    pub const fn retrieve_index(self, x: i32, y: i32, z: i32) -> i32 {
         let bits = match self {
             Strategy::Section => Strategy::SECTION_SIZE_BITS,
             Strategy::Biome => Strategy::BIOME_SIZE_BITS,
@@ -80,6 +77,7 @@ impl Strategy {
     }
 }
 
+// todo: update palette to take a "state"?
 #[derive(Debug)]
 pub enum Palette {
     SingleValue { block_type_id: VarInt },
@@ -161,6 +159,47 @@ impl PaletteContainer {
         }
     }
 
+    pub fn set_all(
+        &mut self,
+        strategy: Strategy,
+        indexes: Vec<i32>,
+        block_id: VarInt,
+    ) -> std::result::Result<(), BitSetValidationError> {
+        match self.palette.id_for(block_id) {
+            Index::CurrentIndex(id) => {
+                for index in indexes {
+                    self.storage.set(index, id)?;
+                }
+                Ok(())
+            }
+            Index::NewSize(new_size) => {
+                let bits_per_entry = strategy.bit_size(new_size);
+                let new_palette = match new_size {
+                    0 | 1 => unreachable!(),
+                    2 | 3 => self.copy_to_new_linear(block_id),
+                    4 if matches!(strategy, Strategy::Section) => self.copy_to_new_linear(block_id),
+                    x if x <= 8 && matches!(strategy, Strategy::Section) => {
+                        self.copy_to_new_linear(block_id)
+                    }
+                    x => Palette::Direct,
+                };
+                let mut new_bitset = BitStorage::new(strategy.locked_entry_count(), bits_per_entry);
+                for idx in 0..self.storage.size() {
+                    let out = self.storage.get(idx)?;
+                    new_bitset.set(idx, out)?;
+                }
+                let raw_id = new_palette.id_for(block_id).current();
+                for index in indexes {
+                    new_bitset.set(index, raw_id)?;
+                }
+                self.bits_per_entry = bits_per_entry as u8;
+                self.palette = new_palette;
+                self.storage = new_bitset;
+                Ok(())
+            }
+        }
+    }
+
     pub fn set(
         &mut self,
         strategy: Strategy,
@@ -181,10 +220,14 @@ impl PaletteContainer {
                     x => Palette::Direct,
                 };
                 let mut new_bitset = BitStorage::new(strategy.locked_entry_count(), bits_per_entry);
-                for x in 0..(new_size as i32 - 1) {
-                    let out = self.storage.get(x)?;
-                    new_bitset.set(x, new_palette.id_for(out.into()).current())?;
+
+                for idx in 0..self.storage.size() {
+                    let out = self.storage.get(idx)?;
+                    new_bitset.set(idx, out)?;
                 }
+                let index_index = new_palette.id_for(block_id).current();
+                new_bitset.set(index, index_index)?;
+
                 self.palette = new_palette;
                 self.storage = new_bitset;
                 Ok(VarInt::from(-1))
@@ -323,6 +366,43 @@ impl ChunkSection {
 
     fn decrement_non_empty_block_count(&mut self) {
         self.block_count -= 1;
+    }
+
+    fn get_block_id(
+        &self,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> std::result::Result<VarInt, BitSetValidationError> {
+        self.states.get(Strategy::Section.retrieve_index(x, y, z))
+    }
+
+    fn set_block_id(
+        &mut self,
+        x: i32,
+        y: i32,
+        z: i32,
+        block_id: VarInt,
+    ) -> std::result::Result<VarInt, BitSetValidationError> {
+        let state_index = Strategy::Section.retrieve_index(x, y, z);
+        self.states.set(Strategy::Section, state_index, block_id)
+    }
+
+    fn rewrite_plane(
+        &mut self,
+        y: i32,
+        block_id: VarInt,
+    ) -> std::result::Result<(), BitSetValidationError> {
+        let mut indexes = Vec::with_capacity(16 * 16);
+        let p1 = y << Strategy::SECTION_SIZE_BITS;
+        for z in 0..16 {
+            let p2 = (p1 | z) << Strategy::SECTION_SIZE_BITS;
+            for x in 0..16 {
+                let idx = p2 | x;
+                indexes.push(idx);
+            }
+        }
+        self.states.set_all(Strategy::Section, indexes, block_id)
     }
 }
 
@@ -557,14 +637,6 @@ impl Chunk {
         Self::section_coord_from(y) - self.get_min_section()
     }
 
-    const fn state_index_from(x: i32, y: i32, z: i32) -> i32 {
-        (((y & 15) << 8) | ((z & 15) << 4)) | (x & 15)
-    }
-
-    const fn biome_index_from(x: i32, y: i32, z: i32) -> i32 {
-        (((y & 15) << 8) | ((z & 15) << 4)) | (x & 15)
-    }
-
     pub fn get_block_id(
         &self,
         x: i32,
@@ -576,7 +648,7 @@ impl Chunk {
             return Ok(0.into());
         }
         let section = &self.chunk_sections[section_index as usize];
-        section.states.get(Self::state_index_from(x, y, z))
+        section.get_block_id(x & 0xF, y & 0xF, z & 0xF)
     }
 
     pub fn rewrite_plane(
@@ -589,14 +661,9 @@ impl Chunk {
             return Err(BitSetValidationError(format!("Out of range.")));
         }
         let section = &mut self.chunk_sections[section_index as usize];
-        section.states = PaletteContainer {
-            bits_per_entry: 0,
-            palette: Palette::SingleValue {
-                block_type_id: block_id,
-            },
-            storage: BitStorage::new(0, 0),
-        };
-        section.block_count = 16 * 16;
+        section.rewrite_plane(y & 0xF, block_id)?;
+        // todo: recalculate section block count better here
+        section.block_count += 16 * 16;
         for x in 0..15 {
             for z in 0..15 {
                 self.height_maps.update_inner(x, y, z, block_id)?;
@@ -617,15 +684,11 @@ impl Chunk {
             return Err(BitSetValidationError(format!("Out of range.")));
         }
         let section = &mut self.chunk_sections[section_index as usize];
-        let state_index = Self::state_index_from(x, y, z);
-        let mutated = section
-            .states
-            .set(Strategy::Section, state_index, block_id)?;
-        println!("{}", mutated);
+        let mutated = section.set_block_id(x & 0xF, y & 0xF, z & 0xF, block_id)?;
         if mutated != block_id || mutated == VarInt::from(-1) {
-            let x_and = x & 15;
-            let z_and = z & 15;
-            self.height_maps.update_inner(x_and, y & 15, z_and, block_id)?;
+            let x_and = x & 0xF;
+            let z_and = z & 0xF;
+            self.height_maps.update_inner(x_and, y, z_and, block_id)?;
             if block_id == 0 {
                 section.decrement_non_empty_block_count();
             } else {
