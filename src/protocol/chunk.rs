@@ -159,23 +159,13 @@ impl PaletteContainer {
         }
     }
 
-    pub fn set_all(
+    pub fn reassert_storage(
         &mut self,
         strategy: Strategy,
-        indexes: Vec<i32>,
         block_id: VarInt,
-    ) -> std::result::Result<(), BitSetValidationError> {
-        log::info!("Setting palette blocks: idxs: {:?}, block_id: {}", indexes, block_id);
+    ) -> std::result::Result<VarInt, BitSetValidationError> {
         match self.palette.id_for(block_id) {
-            Index::CurrentIndex(id) => {
-                log::info!("Matched id: {}", id);
-                for index in indexes {
-                    self.storage.set(index, id)?;
-                }
-                Ok(())
-            }
             Index::NewSize(new_size) => {
-                log::info!("New total size: {}", new_size);
                 let bits_per_entry = strategy.bit_size(new_size);
                 let new_palette = match new_size {
                     0 | 1 => unreachable!(),
@@ -184,23 +174,33 @@ impl PaletteContainer {
                     x if x <= 8 && matches!(strategy, Strategy::Section) => {
                         self.copy_to_new_linear(block_id)
                     }
-                    x => Palette::Direct,
+                    _ => Palette::Direct,
                 };
                 let mut new_bitset = BitStorage::new(strategy.locked_entry_count(), bits_per_entry);
                 for idx in 0..self.storage.size() {
                     let out = self.storage.get(idx)?;
                     new_bitset.set(idx, out)?;
                 }
-                let raw_id = new_palette.id_for(block_id).current();
-                for index in indexes {
-                    new_bitset.set(index, raw_id)?;
-                }
                 self.bits_per_entry = bits_per_entry as u8;
                 self.palette = new_palette;
                 self.storage = new_bitset;
-                Ok(())
+                Ok(self.palette.id_for(block_id).current())
             }
+            Index::CurrentIndex(map) => Ok(map),
         }
+    }
+
+    pub fn set_all(
+        &mut self,
+        strategy: Strategy,
+        indexes: Vec<i32>,
+        block_id: VarInt,
+    ) -> std::result::Result<(), BitSetValidationError> {
+        let block_mapping = self.reassert_storage(strategy, block_id)?;
+        for index in indexes {
+            self.storage.set(index, block_mapping)?;
+        }
+        Ok(())
     }
 
     pub fn set(
@@ -209,39 +209,8 @@ impl PaletteContainer {
         index: i32,
         block_id: VarInt,
     ) -> std::result::Result<VarInt, BitSetValidationError> {
-        log::info!("Setting palette block: idx: {}, block_id: {}", index, block_id);
-        match self.palette.id_for(block_id) {
-            Index::CurrentIndex(id) => {
-                log::info!("Matched id: {}", id);
-                self.storage.get_and_set(index, id).map(Into::into)
-            },
-            Index::NewSize(new_size) => {
-                log::info!("New total size: {}", new_size);
-                let bits_per_entry = strategy.bit_size(new_size);
-                let new_palette = match new_size {
-                    0 | 1 => unreachable!(),
-                    2 | 3 => self.copy_to_new_linear(block_id),
-                    4 if matches!(strategy, Strategy::Section) => self.copy_to_new_linear(block_id),
-                    x if x <= 8 && matches!(strategy, Strategy::Section) => {
-                        self.copy_to_new_linear(block_id)
-                    }
-                    x => Palette::Direct,
-                };
-                let mut new_bitset = BitStorage::new(strategy.locked_entry_count(), bits_per_entry);
-
-                for idx in 0..self.storage.size() {
-                    let out = self.storage.get(idx)?;
-                    new_bitset.set(idx, out)?;
-                }
-                let index_index = new_palette.id_for(block_id).current();
-                log::info!("Single idx idx: {}", index_index);
-                new_bitset.set(index, index_index)?;
-
-                self.palette = new_palette;
-                self.storage = new_bitset;
-                Ok(VarInt::from(-1))
-            }
-        }
+        let block_mapping = self.reassert_storage(strategy, block_id)?;
+        self.storage.get_and_set(index, block_mapping)
     }
 
     pub fn serialize(
