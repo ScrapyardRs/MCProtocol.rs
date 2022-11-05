@@ -186,7 +186,9 @@ impl PaletteContainer {
                 let mut new_bitset = BitStorage::new(strategy.locked_entry_count(), bits_per_entry);
                 for idx in 0..self.storage.size() {
                     let out = self.storage.get(idx)?;
-                    new_bitset.set(idx, new_palette.id_for(out.into()).current())?;
+                    let new = new_palette.id_for(out.into()).current();
+                    println!("Translating: {} from idx {} to state {}", out, idx, new);
+                    new_bitset.set(idx, new)?;
                 }
                 let raw_id = new_palette.id_for(block_id).current();
                 for index in indexes {
