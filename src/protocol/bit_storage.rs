@@ -288,4 +288,11 @@ impl BitStorage {
             BitStorage::SimpleStorage { raw, .. } => raw.clone(),
         }
     }
+
+    pub fn size(&self) -> i32 {
+        match &self {
+            BitStorage::ZeroStorage { size, .. } => *size,
+            BitStorage::SimpleStorage { size, .. } => *size,
+        }
+    }
 }

@@ -184,9 +184,9 @@ impl PaletteContainer {
                     x => Palette::Direct,
                 };
                 let mut new_bitset = BitStorage::new(strategy.locked_entry_count(), bits_per_entry);
-                for x in 0..(new_size as i32 - 1) {
-                    let out = self.storage.get(x)?;
-                    new_bitset.set(x, new_palette.id_for(out.into()).current())?;
+                for idx in 0..self.storage.size() {
+                    let out = self.storage.get(idx)?;
+                    new_bitset.set(idx, new_palette.id_for(out.into()).current())?;
                 }
                 let raw_id = new_palette.id_for(block_id).current();
                 for index in indexes {
@@ -220,9 +220,9 @@ impl PaletteContainer {
                     x => Palette::Direct,
                 };
                 let mut new_bitset = BitStorage::new(strategy.locked_entry_count(), bits_per_entry);
-                for x in 0..(new_size as i32 - 1) {
-                    let out = self.storage.get(x)?;
-                    new_bitset.set(x, new_palette.id_for(out.into()).current())?;
+                for idx in 0..self.storage.size() {
+                    let out = self.storage.get(idx)?;
+                    new_bitset.set(idx, new_palette.id_for(out.into()).current())?;
                 }
                 let index_index = new_palette.id_for(block_id).current();
                 new_bitset.set(index, index_index)?;
