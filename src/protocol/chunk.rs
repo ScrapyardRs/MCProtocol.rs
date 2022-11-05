@@ -1,13 +1,10 @@
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read};
 
 use drax::extension::*;
 use drax::nbt::{CompoundTag, Tag};
 use drax::transport::TransportProcessorContext;
 use drax::transport::{DraxTransport, Result};
 use drax::VarInt;
-use serde::de::{EnumAccess, Error, MapAccess, SeqAccess, Visitor};
-use serde::{Deserializer, Serializer};
-use tokio::io::AsyncWriteExt;
 
 use crate::protocol::bit_storage::{BitSetValidationError, BitStorage};
 use crate::protocol::play::ceil_log_2;
@@ -195,6 +192,7 @@ impl PaletteContainer {
                 for index in indexes {
                     new_bitset.set(index, raw_id)?;
                 }
+                self.bits_per_entry = bits_per_entry as u8;
                 self.palette = new_palette;
                 self.storage = new_bitset;
                 Ok(())
