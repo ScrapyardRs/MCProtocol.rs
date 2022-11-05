@@ -621,10 +621,11 @@ impl Chunk {
         let mutated = section
             .states
             .set(Strategy::Section, state_index, block_id)?;
+        println!("{}", mutated);
         if mutated != block_id || mutated == VarInt::from(-1) {
             let x_and = x & 15;
             let z_and = z & 15;
-            self.height_maps.update_inner(x_and, y, z_and, block_id)?;
+            self.height_maps.update_inner(x_and, y & 15, z_and, block_id)?;
             if block_id == 0 {
                 section.decrement_non_empty_block_count();
             } else {

@@ -758,6 +758,12 @@ pub mod cb {
     use crate::{chat::Chat, commands::Command};
 
     #[derive(drax_derive::DraxTransport, Debug)]
+    pub struct BlockUpdate {
+        pub pos: BlockPos,
+        pub id: VarInt,
+    }
+
+    #[derive(drax_derive::DraxTransport, Debug)]
     pub struct DeclareCommands {
         pub commands: SizedVec<Command>,
         pub root_index: VarInt,
@@ -855,11 +861,15 @@ pub mod cb {
         pub fade_out: i32,
     }
 
-    use super::super::CURRENT_VERSION_IMPL;
+    use super::{super::CURRENT_VERSION_IMPL, BlockPos};
 
     crate::import_registrations! {
+        BlockUpdate {
+            CURRENT_VERSION_IMPL -> 0x09,
+        }
+
         DeclareCommands {
-            CURRENT_VERSION_IMPL -> 0xF,
+            CURRENT_VERSION_IMPL -> 0x0F,
         }
 
         PluginMessage {
