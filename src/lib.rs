@@ -193,8 +193,34 @@ macro_rules! registry {
                         "</a></code>",
                     )]
                     $struct_name {
-                        /// Inner binding for packet in registry
-                         inner: Box<$struct_name>
+                        /// Inner wrapper type for below fields. See type def for more info.
+                        $(
+                        // purposefully break html syntax
+                        /// </td> </tr> </tbody> </table>
+                        ///
+                        /// Packet
+                        #[doc=stringify!($struct_name)]
+                        /// layout:
+                        ///
+                        /// <table style="display=flex; justify-content: start; width: 100%">
+                        /// <thead>
+                        ///     <tr>
+                        ///         <th>Field</th>
+                        ///         <th>Description</th>
+                        ///     </tr>
+                        /// </thead>
+                        /// <tbody>
+                        $(
+                            #[doc=concat!(
+                                "<tr><td>",
+                                stringify!($field_name),
+                                "</td><td>"
+                            )]
+                            #[doc=drax::expand_field!(@internal @doc $(#[$($doc_tt)*])*)]
+                            $(#[$($doc_tt)*])*
+                        )+
+                        )?
+                        inner: Box<$struct_name>
                     })?
                     $(
                     /// Wrapper variant for enum
@@ -206,7 +232,7 @@ macro_rules! registry {
                         "</a></code>",
                     )]
                     $enum_name {
-                        /// Inner binding for packet in registry
+                        /// Inner linkage
                         inner: Box<$enum_name>
                     })?
                 ),*
