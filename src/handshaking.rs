@@ -19,7 +19,7 @@ registry! {
             ///
             /// In the `login` phase the client will be authenticated; this phase ends once the
             /// server sends a `LoginSuccess` packet.
-            Login {},
+            Login {}
         }
     }
 
@@ -33,7 +33,7 @@ registry! {
             /// The port the client used to connect to the server
             port: u16,
             /// The next state the client intends to be in
-            intention: ConnectionProtocol,
+            intention: ConnectionProtocol
         }
     }
 }

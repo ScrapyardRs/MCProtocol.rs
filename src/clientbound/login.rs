@@ -9,27 +9,27 @@ use drax::transport::packet::vec::ByteDrain;
 registry! {
     registry ClientboundLoginRegistry {
         struct LoginDisconnect {
-            reason: JsonDelegate<Chat>,
+            reason: JsonDelegate<Chat>
         },
 
         struct Hello {
             server_id: LimitedString<20>,
             public_key: Vec<u8>,
-            challenge: Vec<u8>,
+            challenge: Vec<u8>
         },
 
         struct LoginGameProfile {
-            game_profile: GameProfile,
+            game_profile: GameProfile
         },
 
         struct LoginCompression {
-            threshold: VarInt,
+            threshold: VarInt
         },
 
         struct CustomQuery {
             transaction_id: VarInt,
             identifier: String,
-            data: Maybe<ByteDrain>,
+            data: Maybe<ByteDrain>
         }
     }
 }

@@ -10,7 +10,7 @@ registry! {
             /// The name of the player
             name: LimitedString<16>,
             /// The profile id of the player; conditionally present
-            profile_id: Maybe<drax::prelude::Uuid>,
+            profile_id: Maybe<drax::prelude::Uuid>
         },
 
         /// The C2S key packet
@@ -18,7 +18,7 @@ registry! {
             /// The shared secret
             key_bytes: Vec<u8>,
             /// An encrypted version of a challenge the server sends.
-            encrypted_challenge: Vec<u8>,
+            encrypted_challenge: Vec<u8>
         },
 
         /// The login plugin response packet
@@ -26,7 +26,7 @@ registry! {
             /// The transaction id
             transaction_id: VarInt,
             /// A drain of the rest of the bytes; conditionally present.
-            data: Maybe<ByteDrain>,
+            data: Maybe<ByteDrain>
         }
     }
 }

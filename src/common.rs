@@ -6,14 +6,15 @@ struct_packet_components! {
     GameProfileProperty {
         name: String,
         value: String,
-        signature: Maybe<String>,
+        signature: Maybe<String>
     }
 
     GameProfile {
         id: Uuid,
         name: String,
-        properties: Vec<GameProfileProperty>,
+        properties: Vec<GameProfileProperty>
     }
 }
 
 pub mod chat;
+pub mod play;

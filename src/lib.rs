@@ -29,11 +29,11 @@ macro_rules! registry_internal {
                         $(
                             $(
                                 $(#[$($ftt)*])*
-                                $field_name: $delegate_type,
-                            )+
+                                $field_name: $delegate_type
+                            ),+
                         )?
-                    },
-                )*
+                    }
+                ),*
             }
         }
     };
@@ -51,8 +51,8 @@ macro_rules! registry_internal {
                 $(
                     $(
                         $(#[$($doc_tt)*])*
-                        $field_name: $delegate_type,
-                    )+
+                        $field_name: $delegate_type
+                    ),+
                 )?
             }
         }
@@ -75,18 +75,18 @@ macro_rules! registry {
                             $(
                                 $(
                                     $(#[$($cftt:tt)*])*
-                                    $c_v_field_name:ident: $c_v_delegate_type:ty,
-                                )+
+                                    $c_v_field_name:ident: $c_v_delegate_type:ty
+                                ),+
                             )?
-                        },
-                    )*
+                        }
+                    ),*
                 })?
                 $(struct $component_struct_name:ident $(<$c_ctx_ty:ty>)? {
                     $( // struct field delegations
                         $(
                             $(#[$($c_doc_tt:tt)*])*
-                            $c_field_name:ident: $c_delegate_type:ty,
-                        )+
+                            $c_field_name:ident: $c_delegate_type:ty
+                        ),+
                     )?
                 })?
             ),*
@@ -107,18 +107,18 @@ macro_rules! registry {
                             $(
                                 $(
                                     $(#[$($ftt:tt)*])*
-                                    $v_field_name:ident: $v_delegate_type:ty,
-                                )+
+                                    $v_field_name:ident: $v_delegate_type:ty
+                                ),+
                             )?
-                        },
-                    )*
+                        }
+                    ),*
                 })?
                 $(struct $struct_name:ident $(<$ctx_ty:ty>)? {
                     $( // struct field delegations
                         $(
                             $(#[$($doc_tt:tt)*])*
-                            $field_name:ident: $delegate_type:ty,
-                        )+
+                            $field_name:ident: $delegate_type:ty
+                        ),+
                     )?
                 })?
             ),*
@@ -194,8 +194,8 @@ macro_rules! registry {
                     )]
                     $struct_name {
                         /// Inner binding for packet in registry
-                         inner: Box<$struct_name>,
-                    },)?
+                         inner: Box<$struct_name>
+                    })?
                     $(
                     /// Wrapper variant for enum
                     #[doc = concat!(
@@ -207,9 +207,9 @@ macro_rules! registry {
                     )]
                     $enum_name {
                         /// Inner binding for packet in registry
-                        inner: Box<$enum_name>,
-                    },)?
-                )*
+                        inner: Box<$enum_name>
+                    })?
+                ),*
             }
         })?
     };

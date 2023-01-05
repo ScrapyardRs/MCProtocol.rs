@@ -8,7 +8,7 @@ registry! {
         /// back with the same payload.
         struct Ping {
             /// The payload of the ping
-            payload: u64,
+            payload: u64
         }
     }
 }

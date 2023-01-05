@@ -36,13 +36,13 @@ registry! {
         /// The response to a [`crate::serverbound::status::Request`] packet.
         struct Response {
             /// The response to the request
-            response: JsonDelegate<StatusResponse>,
+            response: JsonDelegate<StatusResponse>
         },
 
         /// The response to a [`crate::serverbound::status::Ping`] packet.
         struct Pong {
             /// The response to the ping
-            payload: u64,
+            payload: u64
         }
     }
 }
