@@ -3,32 +3,32 @@ use drax::transport::packet::serde_json::JsonDelegate;
 
 #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct Player {
-    id: String,
-    name: String,
+    pub id: String,
+    pub name: String,
 }
 
 #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct StatusPlayers {
-    max: usize,
-    online: usize,
-    sample: Vec<Player>,
+    pub max: usize,
+    pub online: usize,
+    pub sample: Vec<Player>,
 }
 
 #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct StatusVersion {
-    name: String,
-    protocol: i32,
+    pub name: String,
+    pub protocol: i32,
 }
 
 #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct StatusResponse {
-    description: Chat,
-    players: StatusPlayers,
-    version: StatusVersion,
+    pub description: Chat,
+    pub players: StatusPlayers,
+    pub version: StatusVersion,
     #[serde(skip_serializing_if = "Option::is_none")]
-    favicon: Option<String>,
+    pub favicon: Option<String>,
     #[serde(rename = "enforcesSecureChat")]
-    enforces_secure_chat: bool,
+    pub enforces_secure_chat: bool,
 }
 
 registry! {
