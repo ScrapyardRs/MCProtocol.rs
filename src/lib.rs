@@ -101,30 +101,14 @@ macro_rules! registry {
         registry $registry_name:ident {
             $(
                 $(#[$($tt:tt)*])* // any extra attributes for the struct
-                $(enum $enum_name:ident<$(C: $e_ctx_ty:ty,)? $key_name:ident: $key_delegate_type:ty> {
-                    $(@ser_delegate $static_product_delegate_type:ty,)?
-                    $(@match $key_matcher:expr,)?
-                    $( // enum field delegations
-                        $(#[$($vtt:tt)*])*
-                        $variant_name:ident {
-                            $(@key($key_matcher_case:literal);)?
-                            $(
-                                $(
-                                    $(#[$($ftt:tt)*])*
-                                    $v_field_name:ident: $v_delegate_type:ty
-                                ),+
-                            )?
-                        }
-                    ),*
-                })?
-                $(struct $struct_name:ident $(<$ctx_ty:ty>)? {
+                struct $struct_name:ident {
                     $( // struct field delegations
                         $(
                             $(#[$($doc_tt:tt)*])*
                             $field_name:ident: $delegate_type:ty
                         ),+
                     )?
-                })?
+                }
             ),*
         })?
     ) => {
@@ -155,27 +139,6 @@ macro_rules! registry {
             )?
             })?
         })*)?
-        $($(registry_internal! {
-            $(#[$($tt)*])*
-            $(enum $enum_name$(<$e_ctx_ty>)? {
-                $key_name: $key_delegate_type,
-                $(@ser_delegate $static_product_delegate_type,)?
-                $(@match $key_matcher,)?
-                $( // enum field delegations
-                    $(#[$($vtt)*])*
-                    $($key_matcher_case =>)? $variant_name {
-                    $($(
-                        $(#[$($ftt)*])*
-                        $v_field_name: $v_delegate_type,
-                    )+)?
-                    },
-                )*
-            })?
-            $(struct $struct_name$(<$ctx_ty>)? {$($( // struct field delegations
-                $(#[$($doc_tt)*])*
-                $field_name: $delegate_type,
-            )+)?})?
-        })*)?
         $(
         drax::enum_packet_components! {
             $(#[$($registry_attrs)*])*
@@ -187,58 +150,12 @@ macro_rules! registry {
             $registry_name {
                 key: drax::transport::packet::primitive::VarInt,
                 $(
-                    $(
-                    /// Wrapper variant for struct
-                    #[doc = concat!(
-                        "<code style=\"white-space: nowrap\"><a href=\"./struct.",
-                        stringify!($struct_name),
-                        ".html\">",
-                        stringify!($struct_name),
-                        "</a></code>",
-                    )]
-                    $struct_name {
-                        /// Inner wrapper type for below fields. See type def for more info.
+                    $struct_name {$(
                         $(
-                        // purposefully break html syntax
-                        /// </td> </tr> </tbody> </table>
-                        ///
-                        /// Packet
-                        #[doc=stringify!($struct_name)]
-                        /// layout:
-                        ///
-                        /// <table style="display=flex; justify-content: start; width: 100%">
-                        /// <thead>
-                        ///     <tr>
-                        ///         <th>Field</th>
-                        ///         <th>Description</th>
-                        ///     </tr>
-                        /// </thead>
-                        /// <tbody>
-                        $(
-                            #[doc=concat!(
-                                "<tr><td>",
-                                stringify!($field_name),
-                                "</td><td>"
-                            )]
-                            #[doc=drax::expand_field!(@internal @doc $(#[$($doc_tt)*])*)]
                             $(#[$($doc_tt)*])*
-                        )+
-                        )?
-                        inner: Box<$struct_name>
-                    })?
-                    $(
-                    /// Wrapper variant for enum
-                    #[doc = concat!(
-                        "<code style=\"white-space: nowrap\"><a href=\"./enum.",
-                        stringify!($enum_name),
-                        ".html\">",
-                        stringify!($enum_name),
-                        "</a></code>",
-                    )]
-                    $enum_name {
-                        /// Inner linkage
-                        inner: Box<$enum_name>
-                    })?
+                            $field_name: $delegate_type
+                        ),+
+                    )?}
                 ),*
             }
         })?

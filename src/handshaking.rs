@@ -40,7 +40,7 @@ registry! {
 
 #[cfg(test)]
 mod tests {
-    use crate::handshaking::{ClientIntention, ConnectionProtocol, HandshakingRegistry};
+    use crate::handshaking::{ConnectionProtocol, HandshakingRegistry};
     use drax::prelude::DraxWriteExt;
     use std::io::Cursor;
 
@@ -52,12 +52,10 @@ mod tests {
                 .encode_component::<(), HandshakingRegistry>(
                     &mut (),
                     &HandshakingRegistry::ClientIntention {
-                        inner: ClientIntention {
-                            protocol_version: 754,
-                            host_name: "localhost".to_string(),
-                            port: 25565,
-                            intention: ConnectionProtocol::Play {},
-                        },
+                        protocol_version: 754,
+                        host_name: "localhost".to_string(),
+                        port: 25565,
+                        intention: ConnectionProtocol::Play {},
                     },
                 )
                 .await,
