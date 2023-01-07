@@ -1,5 +1,9 @@
 #![feature(macro_metavar_expr)]
+#![feature(iter_next_chunk)]
+#![feature(int_roundings)]
+#![feature(variant_count)]
 
+extern crate core;
 macro_rules! registry_internal {
     ($(#[$($tt:tt)*])* enum $enum_name:ident {
         $key_name:ident: $key_delegate_type:ty,
@@ -103,7 +107,7 @@ macro_rules! registry {
                     $( // enum field delegations
                         $(#[$($vtt:tt)*])*
                         $variant_name:ident {
-                            $(@key($key_matcher_case:literal))?
+                            $(@key($key_matcher_case:literal);)?
                             $(
                                 $(
                                     $(#[$($ftt:tt)*])*

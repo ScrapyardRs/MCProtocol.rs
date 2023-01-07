@@ -16,5 +16,8 @@ struct_packet_components! {
     }
 }
 
+pub mod bit_set;
+pub mod bit_storage;
 pub mod chat;
+pub mod chunk;
 pub mod play;

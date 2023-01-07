@@ -1,6 +1,14 @@
+use crate::common::chat::Chat;
 use drax::nbt::CompoundTag;
-use drax::prelude::{AsyncRead, AsyncWrite, PacketComponent, Size};
+use drax::prelude::{
+    AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxWriteExt, PacketComponent, Size, Uuid,
+};
+use drax::throw_explain;
+use drax::transport::packet::option::Maybe;
 use drax::transport::packet::primitive::VarInt;
+use drax::transport::packet::serde_json::JsonDelegate;
+use drax::transport::packet::string::LimitedString;
+use drax::transport::packet::vec::{LimitedVec, VecU8};
 use std::future::Future;
 use std::mem::size_of;
 use std::pin::Pin;
@@ -90,8 +98,402 @@ impl<C> PacketComponent<C> for BlockPos {
     }
 }
 
+pub type MessageSignature = [u8; 256];
+
+pub enum PackedMessageSignature {
+    IdBase(i32),
+    Signature(MessageSignature),
+}
+
+impl<C> PacketComponent<C> for PackedMessageSignature {
+    type ComponentType = PackedMessageSignature;
+
+    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+        context: &'a mut C,
+        read: &'a mut A,
+    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+        Box::pin(async move {
+            let id = VarInt::decode(context, read).await? - 1;
+            if id == -1 {
+                let mut signature = [0u8; 256];
+                read.read_exact(&mut signature).await?;
+                Ok(PackedMessageSignature::Signature(signature))
+            } else {
+                Ok(PackedMessageSignature::IdBase(id))
+            }
+        })
+    }
+
+    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+        component_ref: &'a Self::ComponentType,
+        context: &'a mut C,
+        write: &'a mut A,
+    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+        Box::pin(async move {
+            match component_ref {
+                PackedMessageSignature::IdBase(id) => {
+                    VarInt::encode(&(id + 1), context, write).await
+                }
+                PackedMessageSignature::Signature(signature) => {
+                    VarInt::encode(&0, context, write).await?;
+                    write.write_all(signature).await?;
+                    Ok(())
+                }
+            }
+        })
+    }
+
+    fn size(input: &Self::ComponentType, context: &mut C) -> drax::prelude::Result<Size> {
+        match input {
+            PackedMessageSignature::IdBase(id) => VarInt::size(&id, context),
+            PackedMessageSignature::Signature(_) => Ok(Size::Constant(257)),
+        }
+    }
+}
+
+macro_rules! min_max_arg_type {
+    ($(
+        $enum_name:ident, $arg_ty:ty,
+    )*) => {
+        registry! {
+            components {
+                $(
+                enum $enum_name<key: u8> {
+                    @match {key & 3},
+                    NoMinMax {},
+                    Min {
+                        min: $arg_ty
+                    },
+                    Max {
+                        max: $arg_ty
+                    },
+                    MinMax {
+                        min: $arg_ty,
+                        max: $arg_ty
+                    }
+                }
+                ),*
+            }
+        }
+    };
+}
+
+min_max_arg_type! {
+    LongArgumentInfo, i64,
+    IntegerArgumentInfo, i32,
+    DoubleArgumentInfo, f64,
+    FloatArgumentInfo, f32,
+}
+
 registry! {
     components {
+        struct BlockHitResult {
+            block_pos: BlockPos,
+            direction: Direction,
+            xo: f32,
+            yo: f32,
+            zo: f32,
+            inside: bool
+        },
+
+        enum Direction<key: VarInt> {
+            Down {},
+            Up {},
+            North {},
+            South {},
+            West {},
+            East {}
+        },
+
+        struct PackedLastSeenMessages {
+            messages: LimitedVec<PackedMessageSignature, 20>
+        },
+
+        struct PackedMessageBody {
+            content: LimitedString<256>,
+            timestamp: u64,
+            salt: u64,
+            last_seen: PackedLastSeenMessages
+        },
+
+        enum StringArgumentType<key: VarInt> {
+            SingleWord {},
+            QuotablePhrase {},
+            GreedyPhrase {}
+        },
+
+        enum IntegerArgumentType<key: u8> {
+            @match {key & 3},
+            NoMinMax {},
+            Min {
+                min: i32
+            },
+            Max {
+                max: i32
+            },
+            MinMax {
+                min: i32,
+                max: i32
+            }
+        },
+
+        enum LongArgumentType<key: u8> {
+            @match {key & 3},
+            NoMinMax {},
+            Min {
+                min: u64
+            },
+            Max {
+                max: u64
+            },
+            MinMax {
+                min: u64,
+                max: u64
+            }
+        },
+
+        enum ArgumentTypeInfo<key: VarInt> {
+            Bool {},
+            Float {
+                argument_type: FloatArgumentInfo
+            },
+            Double {
+                argument_type: DoubleArgumentInfo
+            },
+            Integer {
+                argument_type: IntegerArgumentInfo
+            },
+            Long {
+                argument_type: LongArgumentInfo
+            },
+            String {
+                argument_type: StringArgumentType
+            },
+            Entity {
+                mask: i8
+            },
+            GameProfile {},
+            BlockPos {},
+            ColumnPos {},
+            Vec3 {},
+            Vec2 {},
+            BlockState {},
+            BlockPredicate {},
+            ItemStack {},
+            ItemPredicate {},
+            Color {},
+            Component {},
+            Message {},
+            NbtCompoundTag {},
+            NbtTag {},
+            NbtPath {},
+            Objective {},
+            ObjectiveCriteria {},
+            Operation {},
+            Particle {},
+            Angle {},
+            Rotation {},
+            ScoreboardSlot {},
+            ScoreHolder {
+                multiple: bool
+            },
+            Swizzle {},
+            Team {},
+            ItemSlot {},
+            ResourceLocation {},
+            MobEffect {},
+            Function {},
+            EntityAnchor {},
+            IntRange {},
+            FloatRange {},
+            Dimension {},
+            Gamemode {},
+            Time {},
+            ResourceOrTag {
+                resource_location: String
+            },
+            ResourceOrTagKey {
+                resource_location: String
+            },
+            Resource {
+                resource_location: String
+            },
+            ResourceKey {
+                resource_location: String
+            },
+            TemplateMirror {},
+            TemplateRotation {},
+            Uuid {}
+        },
+
+        struct ChatBind {
+            chat_type: VarInt,
+            name: JsonDelegate<Chat>,
+            target: Maybe<JsonDelegate<Chat>>
+        }
+    }
+}
+
+pub struct CommandEntry {
+    flags: i8,
+    redirect: i32,
+    children: Vec<i32>,
+}
+
+pub enum CommandNode {
+    Root {
+        entry: CommandEntry,
+    },
+    Literal {
+        entry: CommandEntry,
+        literal: String,
+    },
+    Argument {
+        entry: CommandEntry,
+        argument_id: String,
+        argument_type_info: ArgumentTypeInfo,
+        resource_location: Option<String>,
+    },
+}
+
+impl<C> PacketComponent<C> for CommandNode {
+    type ComponentType = CommandNode;
+
+    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+        context: &'a mut C,
+        read: &'a mut A,
+    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+        Box::pin(async move {
+            let flags = i8::decode(context, read).await?;
+            let children = Vec::<VarInt>::decode(context, read).await?;
+            let redirect = if flags & 8 != 0 {
+                VarInt::decode(context, read).await?
+            } else {
+                0
+            };
+            let entry = CommandEntry {
+                flags,
+                redirect,
+                children,
+            };
+            match flags & 3 {
+                0 => Ok(CommandNode::Root { entry }),
+                1 => Ok(CommandNode::Literal {
+                    entry,
+                    literal: String::decode(context, read).await?,
+                }),
+                2 => {
+                    let argument_id = String::decode(context, read).await?;
+                    let argument_type_info = ArgumentTypeInfo::decode(context, read).await?;
+                    let resource_location = if flags & 0x10 != 0 {
+                        Some(String::decode(context, read).await?)
+                    } else {
+                        None
+                    };
+                    Ok(CommandNode::Argument {
+                        entry,
+                        argument_id,
+                        argument_type_info,
+                        resource_location,
+                    })
+                }
+                _ => throw_explain!("Invalid command node type 3"),
+            }
+        })
+    }
+
+    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+        component_ref: &'a Self::ComponentType,
+        context: &'a mut C,
+        write: &'a mut A,
+    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+        Box::pin(async move {
+            let entry = match component_ref {
+                CommandNode::Root { entry } => entry,
+                CommandNode::Literal { entry, .. } => entry,
+                CommandNode::Argument { entry, .. } => entry,
+            };
+            i8::encode(&entry.flags, context, write).await?;
+            Vec::<VarInt>::encode(&entry.children, context, write).await?;
+            if entry.flags & 8 != 0 {
+                write.write_var_int(entry.redirect).await?;
+            }
+            match component_ref {
+                CommandNode::Root { .. } => {}
+                CommandNode::Literal { literal, .. } => {
+                    String::encode(literal, context, write).await?;
+                }
+                CommandNode::Argument {
+                    argument_id,
+                    argument_type_info,
+                    resource_location,
+                    ..
+                } => {
+                    String::encode(argument_id, context, write).await?;
+                    ArgumentTypeInfo::encode(argument_type_info, context, write).await?;
+                    if let Some(location) = resource_location.as_ref() {
+                        String::encode(&location, context, write).await?;
+                    }
+                }
+            }
+            Ok(())
+        })
+    }
+
+    fn size(input: &Self::ComponentType, context: &mut C) -> drax::prelude::Result<Size> {
+        let entry = match input {
+            CommandNode::Root { entry } => entry,
+            CommandNode::Literal { entry, .. } => entry,
+            CommandNode::Argument { entry, .. } => entry,
+        };
+        let mut size = i8::size(&entry.flags, context)?;
+        size = size + Vec::<VarInt>::size(&entry.children, context)?;
+        if entry.flags & 8 != 0 {
+            size = size + VarInt::size(&entry.redirect, context)?;
+        }
+        match input {
+            CommandNode::Root { .. } => {}
+            CommandNode::Literal { literal, .. } => {
+                size = size + String::size(literal, context)?;
+            }
+            CommandNode::Argument {
+                argument_id,
+                argument_type_info,
+                resource_location,
+                ..
+            } => {
+                size = size + String::size(argument_id, context)?;
+                size = size + ArgumentTypeInfo::size(argument_type_info, context)?;
+                if let Some(location) = resource_location.as_ref() {
+                    size = size + String::size(&location, context)?;
+                }
+            }
+        }
+        Ok(size)
+    }
+}
+
+registry! {
+    components {
+        #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+        enum RecipeBookType<key: VarInt> {
+            Crafting {},
+            Furnace {},
+            BlastFurnace {},
+            Smoker {}
+        },
+
+        struct ProfilePublicKey {
+            expiry: u64,
+            encoded_key: VecU8,
+            key_sig: VecU8
+        },
+
+        struct RemoteChatSession {
+            session_id: Uuid,
+            key: ProfilePublicKey
+        },
+
         struct SimpleLocation {
             x: f64,
             y: f64,
@@ -118,6 +520,101 @@ registry! {
         enum InteractionHand<key: VarInt> {
             MainHand {},
             OffHand {}
+        },
+
+        enum Difficulty<key: u8> {
+            Peaceful {},
+            Easy {},
+            Normal {},
+            Hard {}
+        }
+    }
+}
+
+pub enum MapColorPatch {
+    Present {
+        width: u8,
+        height: u8,
+        start_x: u8,
+        start_y: u8,
+        map_colors: Vec<u8>,
+    },
+    Absent,
+}
+
+impl<C> PacketComponent<C> for MapColorPatch {
+    type ComponentType = MapColorPatch;
+
+    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+        context: &'a mut C,
+        read: &'a mut A,
+    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+        Box::pin(async move {
+            let b1 = u8::decode(context, read).await?;
+            if b1 != 0 {
+                let width = b1;
+                let height = u8::decode(context, read).await?;
+                let start_x = u8::decode(context, read).await?;
+                let start_y = u8::decode(context, read).await?;
+                let map_colors = VecU8::decode(context, read).await?;
+                Ok(MapColorPatch::Present {
+                    width,
+                    height,
+                    start_x,
+                    start_y,
+                    map_colors,
+                })
+            } else {
+                Ok(MapColorPatch::Absent)
+            }
+        })
+    }
+
+    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+        component_ref: &'a Self::ComponentType,
+        context: &'a mut C,
+        write: &'a mut A,
+    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+        Box::pin(async move {
+            match component_ref {
+                MapColorPatch::Present {
+                    width,
+                    height,
+                    start_x,
+                    start_y,
+                    map_colors,
+                } => {
+                    u8::encode(width, context, write).await?;
+                    u8::encode(height, context, write).await?;
+                    u8::encode(start_x, context, write).await?;
+                    u8::encode(start_y, context, write).await?;
+                    VecU8::encode(map_colors, context, write).await?;
+                }
+                MapColorPatch::Absent => {
+                    u8::encode(&0, context, write).await?;
+                }
+            }
+            Ok(())
+        })
+    }
+
+    fn size(input: &Self::ComponentType, context: &mut C) -> drax::prelude::Result<Size> {
+        match input {
+            MapColorPatch::Present {
+                width,
+                height,
+                start_x,
+                start_y,
+                map_colors,
+            } => {
+                let mut size = u8::size(width, context)?;
+                size = size + u8::size(height, context)?;
+                size = size + u8::size(start_x, context)?;
+                size = size + u8::size(start_y, context)?;
+                size = size + VecU8::size(map_colors, context)?;
+                Ok(size)
+            }
+            MapColorPatch::Absent => Ok(Size::Constant(1)),
         }
     }
 }

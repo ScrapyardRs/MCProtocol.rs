@@ -1,16 +1,136 @@
-use crate::clientbound::play::Difficulty;
-use crate::common::play::{BlockPos, InteractionHand, ItemStack, Location};
+use crate::common::bit_set::FixedBitSet;
+use crate::common::play::{
+    BlockHitResult, BlockPos, Difficulty, InteractionHand, ItemStack, Location, MessageSignature,
+};
+use crate::common::play::{RecipeBookType, RemoteChatSession};
 use drax::prelude::Uuid;
 use drax::transport::packet::option::Maybe;
-use drax::transport::packet::primitive::VarInt;
+use drax::transport::packet::primitive::{VarInt, VarLong};
 use drax::transport::packet::string::LimitedString;
-use drax::transport::packet::vec::ByteDrain;
+use drax::transport::packet::vec::{ByteDrain, LimitedVec};
 
 registry! {
     components {
         enum ClientCommandAction<key: VarInt> {
             PerformRespawn {},
             RequestStats {}
+        },
+
+        enum PlayerAbilitiesMask<key: u8> {
+            NonFlying {},
+            Flying {
+                @key(2);
+            }
+        },
+
+        struct ArgumentSignature {
+            name: LimitedString<16>,
+            signature: MessageSignature
+        },
+
+        struct ContainerSlot {
+            index: u16,
+            item: Maybe<ItemStack>
+        },
+
+        enum ClickType<key: VarInt> {
+            Pickup {},
+            QuickMove {},
+            Swap {},
+            Clone {},
+            Throw {},
+            QuickCraft {},
+            PickupAll {}
+        },
+
+        enum InteractAction<key: VarInt> {
+            Generic {
+                hand: InteractionHand
+            },
+            Attack {
+            },
+            InteractAt {
+                xa: f32,
+                ya: f32,
+                za: f32,
+                hand: InteractionHand
+            }
+        },
+
+        enum PlayerActionType<key: VarInt> {
+            StartDestroyBlock {},
+            AbortDestroyBlock {},
+            StopDestroyBlock {},
+            DropAllItems {},
+            DropItem {},
+            ReleaseUseItem {},
+            SwapItemWithOffhand {}
+        },
+
+        enum PlayerCommandType<key: VarInt> {
+            PressShiftKey {},
+            ReleaseShiftKey {},
+            StopSleeping {},
+            StartSprinting {},
+            StopSprinting {},
+            StartRidingJump {},
+            StopRidingJump {},
+            OpenInventory {},
+            StartFallFlying {}
+        },
+
+        enum InputFlags<key: u8> {
+            Neiether {},
+            Jumping {},
+            ShiftKeyDown {},
+            ShiftKeyDownAndJumping {}
+        },
+
+        enum ResourcePackAction<key: VarInt> {
+            SuccessfullyLoaded {},
+            Declined {},
+            FailedDownload {},
+            Accepted {}
+        },
+
+        enum SeenAdvancementsAction<key: VarInt> {
+            OpenedTab {
+                tab: String
+            },
+            ClosedScreen {}
+        },
+
+        enum SetCommandBlockMode<key: VarInt> {
+            Sequence {},
+            Auto {},
+            Redstone {}
+        },
+
+        enum StructureBlockUpdateType<key: VarInt> {
+            UpdateData {},
+            SaveArea {},
+            LoadArea {},
+            ScanArea {}
+        },
+
+        enum StructureMode<key: VarInt> {
+            Save {},
+            Load {},
+            Corner {},
+            Data {}
+        },
+
+        enum StructureMirror<key: VarInt> {
+            None {},
+            LeftRight {},
+            FrontBack {}
+        },
+
+        enum Rotation<key: VarInt> {
+            None {},
+            Clockwise90 {},
+            Clockwise180 {},
+            CounterClockwise90 {}
         }
     }
 
@@ -18,25 +138,42 @@ registry! {
         struct AcceptTeleportation {
             teleportation_id: VarInt
         },
+
         struct BlockEntityTagQuery {
             transaction_id: VarInt,
             location: BlockPos
         },
+
         struct ChangeDifficulty {
             difficulty: Difficulty
         },
+
         struct ChatAck {
             offset: VarInt
         },
+
         struct ChatCommand {
-            // todo
+            command: LimitedString<256>,
+            timestamp: u64,
+            salt: u64,
+            signatures: Vec<ArgumentSignature>,
+            last_seen_offset: VarInt,
+            last_seen_set: FixedBitSet<20>
         },
+
         struct Chat {
-            // todo
+            message: LimitedString<256>,
+            timestamp: u64,
+            salt: u64,
+            signature: Maybe<MessageSignature>,
+            last_seen_offset: VarInt,
+            last_seen_set: FixedBitSet<20>
         },
+
         struct ClientCommand {
             action: ClientCommandAction
         },
+
         struct ClientInformation {
             locale: String,
             view_distance: u8,
@@ -47,126 +184,196 @@ registry! {
             text_filtering: bool,
             allows_listing: bool
         },
+
         struct CommandSuggestion {
             transaction_id: VarInt,
             command: LimitedString<32500>
         },
+
         struct ContainerButtonClick {
             container_id: u8,
             button_id: u8
         },
+
         struct ContainerClick {
-            // todo
+            container_id: u8,
+            state_id: VarInt,
+            slot: u16,
+            button: u8,
+            action: ClickType,
+            changed_slots: LimitedVec<ContainerSlot, 128>,
+            carried_item: Maybe<ItemStack>
         },
+
         struct ContainerClose {
             container_id: u8
         },
+
         struct CustomPayload {
             channel_identifier: String,
             data: ByteDrain
         },
+
         struct EditBook {
-            // todo
+            slot: VarInt,
+            pages: Vec<LimitedString<8192>>,
+            title: Maybe<LimitedString<128>>
         },
+
         struct EntityTagQuery {
             transaction_id: VarInt,
             entity_id: VarInt
         },
+
         struct Interact {
-            // todo
+            entity_id: VarInt,
+            action: InteractAction,
+            using_secondary_action: bool
         },
+
         struct JigsawGenerate {
             location: BlockPos,
             levels: VarInt,
             keep_jigsaws: bool
         },
+
         struct KeepAlive {
             keep_alive_id: u64
         },
+
         struct LockDifficulty {
             locked: bool
         },
+
         struct MovePlayerPos {
-            // todo
+            x: f64,
+            y: f64,
+            z: f64,
+            on_ground: bool
         },
+
         struct MovePlayerPosRot {
-            // todo
+            x: f64,
+            y: f64,
+            z: f64,
+            x_rot: f32,
+            y_rot: f32,
+            on_ground: bool
         },
+
         struct MovePlayerRot {
-            // todo
+            x_rot: f32,
+            y_rot: f32,
+            on_ground: bool
         },
+
         struct MovePlayerStatusOnly {
-            // todo
+            status: u8
         },
+
         struct MoveVehicle {
             location: Location
         },
+
         struct PaddleBoat {
             left_paddle: bool,
             right_paddle: bool
         },
+
         struct PickItem {
             slot: VarInt
         },
+
         struct PlaceRecipe {
             container_id: u8,
             recipe_identifier: String,
             shift: bool
         },
+
         struct PlayerAbilities {
-            // todo
+            mask: PlayerAbilitiesMask
         },
+
         struct PlayerAction {
-            // todo
+            action_type: PlayerActionType,
+            at_pos: BlockPos,
+            direction: u8,
+            sequence: VarInt
         },
+
         struct PlayerCommand {
-            // todo
+            id: VarInt,
+            action_type: PlayerCommandType,
+            data: VarInt
         },
+
         struct PlayerInput {
-            // todo
+            xxa: f32,
+            zza: f32,
+            flags: InputFlags
         },
+
         struct Pong {
-            transaction_id: VarInt
+            transaction_id: i32
         },
+
         struct ChatSessionUpdate {
-            // todo
+            chat_session: RemoteChatSession
         },
+
         struct RecipeBookChangeSettings {
-            // todo
+            book_type: RecipeBookType,
+            is_open: bool,
+            is_filtering: bool
         },
+
         struct RecipeBookSeenRecipe {
             recipe_identifier: String
         },
+
         struct RenameItem {
             name: String
         },
+
         struct ResourcePack {
-            // todo
+            action: ResourcePackAction
         },
+
         struct SeenAdvancements {
-            // todo
+            action: SeenAdvancementsAction
         },
+
         struct SelectTrade {
             item: VarInt
         },
+
         struct SetBeacon {
-            // todo
+            primary_effect: Maybe<VarInt>,
+            secondary_effect: Maybe<VarInt>
         },
+
         struct SetCarriedItem {
             slot: u16
         },
+
         struct SetCommandBlock {
-            // todo
+            location: BlockPos,
+            command: String,
+            mode: SetCommandBlockMode,
+            flags: u8
         },
+
         struct SetCommandMinecart {
             entity_id: VarInt,
             command: String,
             track_output: bool
         },
+
         struct SetCreativeModeSlot {
             slot_num: u16,
             item: Maybe<ItemStack>
         },
+
         struct SetJigsawBlock {
             location: BlockPos,
             name: String,
@@ -175,22 +382,45 @@ registry! {
             final_state: String,
             joint: String
         },
+
         struct SetStructureBlock {
-            // todo
+            pos: BlockPos,
+            update_type: StructureBlockUpdateType,
+            mode: StructureMode,
+            name: String,
+            off_x: u8,
+            off_y: u8,
+            off_z: u8,
+            size_x: u8,
+            size_y: u8,
+            size_z: u8,
+            mirror: StructureMirror,
+            rotation: Rotation,
+            data: LimitedString<128>,
+            integrity: f32,
+            seed: VarLong,
+            flags: u8
         },
+
         struct SignUpdate {
             pos: BlockPos,
             lines: [LimitedString<384>; 4]
         },
+
         struct Swing {
             hand: InteractionHand
         },
+
         struct TeleportToEntity {
             uuid: Uuid
         },
+
         struct UseItemOn {
-            // todo
+            hand: InteractionHand,
+            result: BlockHitResult,
+            sequence: VarInt
         },
+
         struct UseItem {
             hand: InteractionHand,
             sequence: VarInt
