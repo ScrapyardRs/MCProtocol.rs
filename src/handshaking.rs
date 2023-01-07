@@ -47,19 +47,22 @@ mod tests {
     #[tokio::test]
     pub async fn regression_test() -> drax::prelude::Result<()> {
         let mut cursor = Cursor::new(vec![]);
-        cursor
-            .encode_component::<(), HandshakingRegistry>(
-                &mut (),
-                &HandshakingRegistry::ClientIntention {
-                    inner: ClientIntention {
-                        protocol_version: 754,
-                        host_name: "localhost".to_string(),
-                        port: 25565,
-                        intention: ConnectionProtocol::Play {},
+        assert!(matches!(
+            cursor
+                .encode_component::<(), HandshakingRegistry>(
+                    &mut (),
+                    &HandshakingRegistry::ClientIntention {
+                        inner: ClientIntention {
+                            protocol_version: 754,
+                            host_name: "localhost".to_string(),
+                            port: 25565,
+                            intention: ConnectionProtocol::Play {},
+                        },
                     },
-                },
-            )
-            .await?;
+                )
+                .await,
+            Ok(_)
+        ));
         Ok(())
     }
 }
