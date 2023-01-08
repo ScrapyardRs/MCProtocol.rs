@@ -9,8 +9,8 @@ pub struct Player {
 
 #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct StatusPlayers {
-    pub max: usize,
-    pub online: usize,
+    pub max: isize,
+    pub online: isize,
     pub sample: Vec<Player>,
 }
 
