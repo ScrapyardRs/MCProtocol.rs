@@ -1,26 +1,26 @@
 use crate::common::chat::Chat;
 use drax::transport::packet::serde_json::JsonDelegate;
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct Player {
     pub id: String,
     pub name: String,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct StatusPlayers {
     pub max: isize,
     pub online: isize,
     pub sample: Vec<Player>,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct StatusVersion {
     pub name: String,
     pub protocol: i32,
 }
 
-#[derive(serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
 pub struct StatusResponse {
     pub description: Chat,
     pub players: StatusPlayers,

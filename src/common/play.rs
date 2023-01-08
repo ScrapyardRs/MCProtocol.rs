@@ -100,6 +100,7 @@ impl<C> PacketComponent<C> for BlockPos {
 
 pub type MessageSignature = [u8; 256];
 
+#[derive(Debug)]
 pub enum PackedMessageSignature {
     IdBase(i32),
     Signature(MessageSignature),
@@ -334,12 +335,14 @@ registry! {
     }
 }
 
+#[derive(Debug)]
 pub struct CommandEntry {
     flags: i8,
     redirect: i32,
     children: Vec<i32>,
 }
 
+#[derive(Debug)]
 pub enum CommandNode {
     Root {
         entry: CommandEntry,
@@ -475,7 +478,7 @@ impl<C> PacketComponent<C> for CommandNode {
 
 registry! {
     components {
-        #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
+        #[derive(PartialEq, Eq, Clone, Copy, Hash)]
         enum RecipeBookType<key: VarInt> {
             Crafting {},
             Furnace {},
@@ -531,6 +534,7 @@ registry! {
     }
 }
 
+#[derive(Debug)]
 pub enum MapColorPatch {
     Present {
         width: u8,

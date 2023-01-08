@@ -6,6 +6,7 @@ use drax::prelude::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, PacketCo
 
 const ADDRESS_BITS_PER_WORD: i32 = 6;
 
+#[derive(Debug)]
 pub struct BitSet {
     pub words: Vec<u64>,
     words_in_use: usize,

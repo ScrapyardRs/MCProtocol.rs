@@ -48,6 +48,7 @@ impl Default for RelativeArgument {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerInfoEntry {
     pub profile_id: Uuid,
     pub profile: Option<GameProfile>,
@@ -72,6 +73,7 @@ impl PlayerInfoEntry {
     }
 }
 
+#[derive(Debug)]
 pub enum PlayerInfoAction {
     AddPlayer,
     InitializeChat,
@@ -261,6 +263,7 @@ impl<'b> PacketComponent<PlayerInfoActionContext<'b>> for PlayerInfoAction {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerInfoUpsert {
     pub actions: BitSet,
     pub entries: Vec<PlayerInfoEntry>,
@@ -336,6 +339,7 @@ impl<C> PacketComponent<C> for PlayerInfoUpsert {
     }
 }
 
+#[derive(Debug)]
 pub struct RecipeBookSettings {
     pub settings: HashMap<RecipeBookType, RecipeBookSetting>,
 }
@@ -419,6 +423,7 @@ impl EquipmentSlot {
     }
 }
 
+#[derive(Debug)]
 pub struct SetEquipmentList;
 
 impl<C> PacketComponent<C> for SetEquipmentList {
@@ -470,6 +475,7 @@ impl<C> PacketComponent<C> for SetEquipmentList {
     }
 }
 
+#[derive(Debug)]
 pub enum SoundEvent {
     Direct {
         location: String,
@@ -527,6 +533,7 @@ impl<C> PacketComponent<C> for SoundEvent {
     }
 }
 
+#[derive(Debug)]
 pub struct DisplayInfoFlags {
     pub show_toast: bool,
     pub hidden: bool,
@@ -617,6 +624,7 @@ impl<C> PacketComponent<C> for DelegateStr {
     }
 }
 
+#[derive(Debug)]
 pub struct ShapedRecipeBase {
     pub width: i32,
     pub height: i32,
@@ -844,7 +852,7 @@ registry! {
             filtering: bool
         },
 
-        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum EquipmentSlot<key: VarInt> {
             MainHand {},
             OffHand {},
