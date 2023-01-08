@@ -337,9 +337,9 @@ registry! {
 
 #[derive(Debug)]
 pub struct CommandEntry {
-    flags: i8,
-    redirect: i32,
-    children: Vec<i32>,
+    pub flags: i8,
+    pub redirect: i32,
+    pub children: Vec<i32>,
 }
 
 #[derive(Debug)]
