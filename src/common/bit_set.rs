@@ -75,7 +75,7 @@ impl BitSet {
         }
     }
 
-    fn value_of(l_arr: Vec<u64>) -> drax::prelude::Result<BitSet> {
+    pub fn value_of(l_arr: Vec<u64>) -> drax::prelude::Result<BitSet> {
         let mut n = l_arr.len();
         while n > 0 && l_arr[n - 1] == 0 {
             n -= 1;
@@ -88,11 +88,11 @@ impl BitSet {
         Ok(bit_set)
     }
 
-    fn to_long_array(&self) -> Vec<u64> {
+    pub fn to_long_array(&self) -> Vec<u64> {
         self.words[..self.words_in_use].to_vec()
     }
 
-    fn from_bytes(bytes: &[u8]) -> drax::prelude::Result<BitSet> {
+    pub fn from_bytes(bytes: &[u8]) -> drax::prelude::Result<BitSet> {
         let used_bits = bytes.iter().rposition(|x| *x != 0).unwrap_or(0);
         let mut words = vec![0; (used_bits + 7) / 8];
         let mut iter = bytes.iter();
@@ -120,7 +120,7 @@ impl BitSet {
         Ok(bit_set)
     }
 
-    fn to_byte_array(&self) -> Vec<u8> {
+    pub fn to_byte_array(&self) -> Vec<u8> {
         let mut extra = 0;
         for b in self.words[self.words_in_use].to_be_bytes().iter() {
             if *b == 0 {
