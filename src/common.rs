@@ -3,14 +3,14 @@ use drax::struct_packet_components;
 use drax::transport::packet::option::Maybe;
 
 struct_packet_components! {
-    #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
+    #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize, Clone)]
     GameProfileProperty {
         name: String,
         value: String,
         signature: #[serde(skip_serializing_if = "Option::is_none")] Maybe<String>
     }
 
-    #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
+    #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize, Clone)]
     GameProfile {
         id: Uuid,
         name: String,
