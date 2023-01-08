@@ -1723,6 +1723,7 @@ registry! {
             chunk_radius: VarInt,
             simulation_distance: VarInt,
             reduced_debug_info: bool,
+            show_death_screen: bool,
             is_debug: bool,
             is_flat: bool,
             last_death_location: Maybe<GlobalPos>
