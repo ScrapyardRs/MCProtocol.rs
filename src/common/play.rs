@@ -1,5 +1,4 @@
 use crate::common::chat::Chat;
-use drax::nbt::CompoundTag;
 use drax::prelude::{
     AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxWriteExt, PacketComponent, Size, Uuid,
 };
@@ -12,6 +11,7 @@ use drax::transport::packet::vec::{LimitedVec, VecU8};
 use std::future::Future;
 use std::mem::size_of;
 use std::pin::Pin;
+use drax::nbt::EnsuredCompoundTag;
 
 const MULTIPLY_DE_BRUIJN_BIT_POSITION: [i32; 32] = [
     0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16, 7, 26,
@@ -512,7 +512,7 @@ registry! {
         struct ItemStack {
             item_id: VarInt,
             item_data: u8,
-            tag: Option<CompoundTag>
+            tag: EnsuredCompoundTag<0>
         },
 
         struct GlobalPos {

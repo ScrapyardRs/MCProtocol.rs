@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 
 use crate::common::bit_storage::{BitSetValidationError, BitStorage};
 use crate::common::play::ceil_log_2;
-use drax::nbt::{CompoundTag, Tag};
+use drax::nbt::{EnsuredCompoundTag, Tag};
 use drax::prelude::{
     AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxReadExt, DraxWriteExt, PacketComponent,
     Result, Size, TransportError,
@@ -416,29 +417,29 @@ impl<C> PacketComponent<C> for ChunkSection {
 pub struct HeightMaps {
     world_surface: BitStorage,
     motion_blocking: BitStorage,
-    cached_compound_tag: CompoundTag,
+    cached_compound_tag: Option<Tag>,
 }
 
 impl HeightMaps {
     async fn encode<A: AsyncWrite + Unpin + ?Sized>(&self, writer: &mut A) -> Result<()> {
-        drax::nbt::write_nbt(&self.cached_compound_tag, writer).await
+        EnsuredCompoundTag::<0>::encode(&self.cached_compound_tag, &mut (), writer).await?;
+        Ok(())
     }
 
     async fn decode<R: AsyncRead + Unpin + ?Sized>(read: &mut R, height: i32) -> Result<Self>
     where
         Self: Sized,
     {
-        let tag = drax::nbt::read_nbt(read, 0x200000u64).await?;
+        let tag = EnsuredCompoundTag::<0>::decode(&mut (), read).await?;
         match tag {
-            None => throw_explain!("Failed to load tag, none was found."),
-            Some(tag) => {
+            Some(Tag::CompoundTag(tag)) => {
                 match (
-                    tag.get_tag(&"WORLD_SURFACE".to_string()),
-                    tag.get_tag(&"MOTION_BLOCKING".to_string()),
+                    tag.get(&"WORLD_SURFACE".to_string()),
+                    tag.get(&"MOTION_BLOCKING".to_string()),
                 ) {
                     (
-                        Some(Tag::LongArrayTag(world_surface)),
-                        Some(Tag::LongArrayTag(motion_blocking)),
+                        Some(Tag::TagLongArray(world_surface)),
+                        Some(Tag::TagLongArray(motion_blocking)),
                     ) => Ok(HeightMaps {
                         world_surface: BitStorage::with_seeded_raw(
                             256,
@@ -452,33 +453,40 @@ impl HeightMaps {
                             motion_blocking.clone(),
                         )
                         .map_err(|err| err_explain!(err.0))?,
-                        cached_compound_tag: tag,
+                        cached_compound_tag: Some(Tag::CompoundTag(tag)),
                     }),
                     (_, _) => {
                         throw_explain!("Could not find WORLD_SURFACE and MOTION_BLOCKING as larrs.")
                     }
                 }
             }
+            None | Some(_) => {
+                throw_explain!("Failed to load tag, none was found.")
+            }
         }
     }
 
     fn precondition_size(&self) -> Result<usize> {
-        Ok(drax::nbt::size_nbt(&self.cached_compound_tag))
+        Ok(
+            match EnsuredCompoundTag::<0>::size(&self.cached_compound_tag, &mut ())? {
+                Size::Dynamic(x) | Size::Constant(x) => x,
+            },
+        )
     }
 }
 
 impl HeightMaps {
     pub(crate) fn cache_compound_tag(&mut self) {
-        let mut tag = CompoundTag::new();
-        tag.put_tag(
+        let mut tag = HashMap::new();
+        tag.insert(
             "WORLD_SURFACE".to_string(),
-            Tag::LongArrayTag(self.world_surface.get_raw().clone()),
+            Tag::TagLongArray(self.world_surface.get_raw().clone()),
         );
-        tag.put_tag(
+        tag.insert(
             "MOTION_BLOCKING".to_string(),
-            Tag::LongArrayTag(self.motion_blocking.get_raw().clone()),
+            Tag::TagLongArray(self.motion_blocking.get_raw().clone()),
         );
-        self.cached_compound_tag = tag;
+        self.cached_compound_tag = Some(Tag::CompoundTag(tag));
     }
 
     fn get_index(x: i32, z: i32) -> i32 {
@@ -562,7 +570,7 @@ impl Chunk {
         let mut height_maps = HeightMaps {
             world_surface: BitStorage::new(256, ceil_log_2(height + 1)),
             motion_blocking: BitStorage::new(256, ceil_log_2(height + 1)),
-            cached_compound_tag: Default::default(),
+            cached_compound_tag: Some(Tag::CompoundTag(HashMap::new())),
         };
         height_maps.cache_compound_tag();
         Self {

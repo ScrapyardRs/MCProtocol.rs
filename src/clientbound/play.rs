@@ -7,7 +7,7 @@ use crate::common::play::{
 };
 use crate::common::play::{RecipeBookType, RemoteChatSession};
 use crate::common::{GameProfile, GameProfileProperty};
-use drax::nbt::CompoundTag;
+use drax::nbt::EnsuredCompoundTag;
 use drax::prelude::{
     AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxReadExt, DraxWriteExt, PacketComponent,
     Size, Uuid,
@@ -1157,7 +1157,7 @@ registry! {
             packed_xz: u8,
             y: i16,
             block_type: VarInt,
-            tag: Option<CompoundTag>
+            tag: EnsuredCompoundTag<0>
         },
 
         struct LevelChunkData {
@@ -1551,7 +1551,7 @@ registry! {
         struct BlockEntityData {
             pos: BlockPos,
             block_entity_type: VarInt,
-            tag: Option<CompoundTag>
+            tag: EnsuredCompoundTag<0>
         },
 
         struct BlockEvent {
@@ -1715,7 +1715,7 @@ registry! {
             game_type: u8,
             previous_game_type: u8,
             levels: Vec<String>,
-            codec: Option<CompoundTag>,
+            codec: EnsuredCompoundTag<0>,
             dimension_type: String,
             dimension: String,
             seed: u64,
@@ -2068,7 +2068,7 @@ registry! {
 
         struct TagQuery {
             transaction_id: VarInt,
-            tag: Option<CompoundTag>
+            tag: EnsuredCompoundTag<0>
         },
 
         struct TakeItemEntity {
@@ -2107,7 +2107,7 @@ registry! {
             amplifier: u8,
             duration: VarInt,
             flags: u8,
-            factor_data: Maybe<Option<CompoundTag>>
+            factor_data: Maybe<EnsuredCompoundTag<0>>
         },
 
         struct UpdateRecipes {
