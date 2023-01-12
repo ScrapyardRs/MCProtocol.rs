@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -433,26 +432,34 @@ impl HeightMaps {
         let tag = EnsuredCompoundTag::<0>::decode(&mut (), read).await?;
         match tag {
             Some(Tag::CompoundTag(tag)) => {
-                match (
-                    tag.get(&"WORLD_SURFACE".to_string()),
-                    tag.get(&"MOTION_BLOCKING".to_string()),
-                ) {
-                    (
-                        Some(Tag::TagLongArray(world_surface)),
-                        Some(Tag::TagLongArray(motion_blocking)),
-                    ) => Ok(HeightMaps {
-                        world_surface: BitStorage::with_seeded_raw(
-                            256,
-                            ceil_log_2(height + 1),
-                            world_surface.clone(),
-                        )
-                        .map_err(|err| err_explain!(err.0))?,
-                        motion_blocking: BitStorage::with_seeded_raw(
-                            256,
-                            ceil_log_2(height + 1),
-                            motion_blocking.clone(),
-                        )
-                        .map_err(|err| err_explain!(err.0))?,
+                let mut world_surface = None;
+                let mut motion_blocking = None;
+                macro_rules! assign_inner {
+                    ($bind_out:ident, $bind_v:ident, $bind_height:ident) => {
+                        if let Tag::TagLongArray($bind_v) = $bind_v {
+                            $bind_out = Some(
+                                BitStorage::with_seeded_raw(
+                                    256,
+                                    ceil_log_2($bind_height + 1),
+                                    $bind_v.clone(),
+                                )
+                                .map_err(|err| err_explain!(err.0))?,
+                            );
+                        }
+                    };
+                }
+                for (k, v) in &tag {
+                    if format!("WORLD_SURFACE").eq(k) {
+                        assign_inner!(world_surface, v, height);
+                    } else if format!("MOTION_BLOCKING").eq(k) {
+                        assign_inner!(motion_blocking, v, height);
+                    }
+                }
+
+                match (world_surface, motion_blocking) {
+                    (Some(world_surface), Some(motion_blocking)) => Ok(HeightMaps {
+                        world_surface,
+                        motion_blocking,
                         cached_compound_tag: Some(Tag::CompoundTag(tag)),
                     }),
                     (_, _) => {
@@ -477,15 +484,15 @@ impl HeightMaps {
 
 impl HeightMaps {
     pub(crate) fn cache_compound_tag(&mut self) {
-        let mut tag = HashMap::new();
-        tag.insert(
+        let mut tag = Vec::new();
+        tag.push((
             "WORLD_SURFACE".to_string(),
             Tag::TagLongArray(self.world_surface.get_raw().clone()),
-        );
-        tag.insert(
+        ));
+        tag.push((
             "MOTION_BLOCKING".to_string(),
             Tag::TagLongArray(self.motion_blocking.get_raw().clone()),
-        );
+        ));
         self.cached_compound_tag = Some(Tag::CompoundTag(tag));
     }
 
@@ -570,7 +577,7 @@ impl Chunk {
         let mut height_maps = HeightMaps {
             world_surface: BitStorage::new(256, ceil_log_2(height + 1)),
             motion_blocking: BitStorage::new(256, ceil_log_2(height + 1)),
-            cached_compound_tag: Some(Tag::CompoundTag(HashMap::new())),
+            cached_compound_tag: Some(Tag::CompoundTag(Vec::new())),
         };
         height_maps.cache_compound_tag();
         Self {
