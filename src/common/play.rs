@@ -505,8 +505,8 @@ registry! {
 
         struct Location {
             inner_loc: SimpleLocation,
-            yaw: f64,
-            pitch: f64
+            yaw: f32,
+            pitch: f32
         },
 
         struct ItemStack {
