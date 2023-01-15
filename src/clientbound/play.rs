@@ -17,10 +17,8 @@ use drax::transport::packet::primitive::{VarInt, VarLong};
 use drax::transport::packet::serde_json::JsonDelegate;
 use drax::transport::packet::string::LimitedString;
 use drax::transport::packet::vec::{ByteDrain, LimitedVec};
-use drax::{err_explain, throw_explain};
+use drax::{err_explain, throw_explain, PinnedLivelyResult};
 use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
 
 impl RelativeArgument {
     pub const X_BIT: u8 = 0x00;
@@ -91,10 +89,10 @@ union PlayerInfoActionContext<'a> {
 impl<'b> PacketComponent<PlayerInfoActionContext<'b>> for PlayerInfoAction {
     type ComponentType = ();
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut PlayerInfoActionContext<'b>,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             unsafe {
                 let (in_set, entry) = &mut context.decode_context;
@@ -132,11 +130,11 @@ impl<'b> PacketComponent<PlayerInfoActionContext<'b>> for PlayerInfoAction {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         _: &'a Self::ComponentType,
         context: &'a mut PlayerInfoActionContext<'b>,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             unsafe {
                 let (in_set, entry) = context.encode_context;
@@ -269,13 +267,13 @@ pub struct PlayerInfoUpsert {
     pub entries: Vec<PlayerInfoEntry>,
 }
 
-impl<C> PacketComponent<C> for PlayerInfoUpsert {
+impl<C: Send + Sync> PacketComponent<C> for PlayerInfoUpsert {
     type ComponentType = Self;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let actions = FixedBitSet::<6>::decode(context, read).await?;
 
@@ -295,11 +293,11 @@ impl<C> PacketComponent<C> for PlayerInfoUpsert {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             FixedBitSet::<6>::encode(&component_ref.actions, context, write).await?;
 
@@ -344,13 +342,13 @@ pub struct RecipeBookSettings {
     pub settings: HashMap<RecipeBookType, RecipeBookSetting>,
 }
 
-impl<C> PacketComponent<C> for RecipeBookSettings {
+impl<C: Send + Sync> PacketComponent<C> for RecipeBookSettings {
     type ComponentType = RecipeBookSettings;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let mut settings = RecipeBookSettings {
                 settings: HashMap::with_capacity(4),
@@ -371,11 +369,11 @@ impl<C> PacketComponent<C> for RecipeBookSettings {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             for variant in [
                 RecipeBookType::Crafting,
@@ -426,13 +424,13 @@ impl EquipmentSlot {
 #[derive(Debug)]
 pub struct SetEquipmentList;
 
-impl<C> PacketComponent<C> for SetEquipmentList {
+impl<C: Send + Sync> PacketComponent<C> for SetEquipmentList {
     type ComponentType = Vec<(EquipmentSlot, Option<ItemStack>)>;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let mut slots = Vec::new();
 
@@ -448,11 +446,11 @@ impl<C> PacketComponent<C> for SetEquipmentList {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             for (i, (slot, item)) in component_ref.iter().enumerate() {
                 let mut b = slot.ordinal() as u8;
@@ -484,13 +482,13 @@ pub enum SoundEvent {
     Generic(i32),
 }
 
-impl<C> PacketComponent<C> for SoundEvent {
+impl<C: Send + Sync> PacketComponent<C> for SoundEvent {
     type ComponentType = SoundEvent;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let v = read.read_var_int().await?;
             if v == 0 {
@@ -503,11 +501,11 @@ impl<C> PacketComponent<C> for SoundEvent {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             match component_ref {
                 SoundEvent::Direct { location, range } => {
@@ -540,13 +538,13 @@ pub struct DisplayInfoFlags {
     pub background: Option<String>,
 }
 
-impl<C> PacketComponent<C> for DisplayInfoFlags {
+impl<C: Send + Sync> PacketComponent<C> for DisplayInfoFlags {
     type ComponentType = DisplayInfoFlags;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let flag = i32::decode(context, read).await?;
             let background = if flag & 0x01 != 0 {
@@ -562,11 +560,11 @@ impl<C> PacketComponent<C> for DisplayInfoFlags {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             let mut flag = 0;
             if component_ref.background.is_some() {
@@ -598,21 +596,21 @@ impl<C> PacketComponent<C> for DisplayInfoFlags {
 
 pub struct DelegateStr;
 
-impl<C> PacketComponent<C> for DelegateStr {
+impl<C: Send + Sync> PacketComponent<C> for DelegateStr {
     type ComponentType = &'static str;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         _: &'a mut C,
         _: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         unimplemented!("This is a delegate serializer type.")
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         _: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             let ref_str = component_ref.to_string();
             String::encode(&ref_str, &mut (), write).await
@@ -634,13 +632,13 @@ pub struct ShapedRecipeBase {
     pub result: Option<ItemStack>,
 }
 
-impl<C> PacketComponent<C> for ShapedRecipeBase {
+impl<C: Send + Sync> PacketComponent<C> for ShapedRecipeBase {
     type ComponentType = ShapedRecipeBase;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let width = read.read_var_int().await?;
             let height = read.read_var_int().await?;
@@ -662,11 +660,11 @@ impl<C> PacketComponent<C> for ShapedRecipeBase {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             write.write_var_int(component_ref.width).await?;
             write.write_var_int(component_ref.height).await?;

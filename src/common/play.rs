@@ -1,17 +1,15 @@
 use crate::common::chat::Chat;
+use drax::nbt::EnsuredCompoundTag;
 use drax::prelude::{
     AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxWriteExt, PacketComponent, Size, Uuid,
 };
-use drax::throw_explain;
 use drax::transport::packet::option::Maybe;
 use drax::transport::packet::primitive::VarInt;
 use drax::transport::packet::serde_json::JsonDelegate;
 use drax::transport::packet::string::LimitedString;
 use drax::transport::packet::vec::{LimitedVec, VecU8};
-use std::future::Future;
+use drax::{throw_explain, PinnedLivelyResult};
 use std::mem::size_of;
-use std::pin::Pin;
-use drax::nbt::EnsuredCompoundTag;
 
 const MULTIPLY_DE_BRUIJN_BIT_POSITION: [i32; 32] = [
     0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16, 7, 26,
@@ -61,13 +59,13 @@ impl BlockPos {
     const X_OFFSET: i32 = (Self::PACKED_Y_LENGTH + Self::PACKED_Z_LENGTH) as i32;
 }
 
-impl<C> PacketComponent<C> for BlockPos {
+impl<C: Send + Sync> PacketComponent<C> for BlockPos {
     type ComponentType = BlockPos;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let value = i64::decode(context, read).await?;
             let x = (value << (64 - Self::X_OFFSET - Self::PACKED_X_LENGTH)
@@ -79,11 +77,11 @@ impl<C> PacketComponent<C> for BlockPos {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             let mut value: i64 = 0;
             value |= (component_ref.x as i64 & Self::PACKED_X_MASK) << Self::X_OFFSET;
@@ -106,13 +104,13 @@ pub enum PackedMessageSignature {
     Signature(MessageSignature),
 }
 
-impl<C> PacketComponent<C> for PackedMessageSignature {
+impl<C: Send + Sync> PacketComponent<C> for PackedMessageSignature {
     type ComponentType = PackedMessageSignature;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let id = VarInt::decode(context, read).await? - 1;
             if id == -1 {
@@ -125,11 +123,11 @@ impl<C> PacketComponent<C> for PackedMessageSignature {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             match component_ref {
                 PackedMessageSignature::IdBase(id) => {
@@ -359,13 +357,13 @@ pub enum CommandNode {
     },
 }
 
-impl<C> PacketComponent<C> for CommandNode {
+impl<C: Send + Sync> PacketComponent<C> for CommandNode {
     type ComponentType = CommandNode;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let flags = i8::decode(context, read).await?;
             let children = Vec::<VarInt>::decode(context, read).await?;
@@ -405,11 +403,11 @@ impl<C> PacketComponent<C> for CommandNode {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             let entry = match component_ref {
                 CommandNode::Root { entry } => entry,
@@ -546,13 +544,13 @@ pub enum MapColorPatch {
     Absent,
 }
 
-impl<C> PacketComponent<C> for MapColorPatch {
+impl<C: Send + Sync> PacketComponent<C> for MapColorPatch {
     type ComponentType = MapColorPatch;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let b1 = u8::decode(context, read).await?;
             if b1 != 0 {
@@ -574,11 +572,11 @@ impl<C> PacketComponent<C> for MapColorPatch {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             match component_ref {
                 MapColorPatch::Present {

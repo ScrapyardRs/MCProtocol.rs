@@ -238,7 +238,7 @@ impl BitStorage {
         }
     }
 
-    pub async fn from_reader<R: drax::prelude::AsyncRead + Unpin + ?Sized>(
+    pub async fn from_reader<R: drax::prelude::AsyncRead + Unpin + Send + Sync + ?Sized>(
         reader: &mut R,
         bits: u8,
         storage_size: i32,
@@ -275,7 +275,7 @@ impl BitStorage {
         }
     }
 
-    pub async fn to_writer<W: drax::prelude::AsyncWrite + Unpin + ?Sized>(
+    pub async fn to_writer<W: drax::prelude::AsyncWrite + Unpin + Send + Sync + ?Sized>(
         &self,
         writer: &mut W,
     ) -> Result<()> {

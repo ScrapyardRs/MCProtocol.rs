@@ -1,7 +1,6 @@
 use std::cmp::max;
-use std::future::Future;
-use std::pin::Pin;
 
+use drax::PinnedLivelyResult;
 use drax::prelude::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, PacketComponent, Size};
 
 const ADDRESS_BITS_PER_WORD: i32 = 6;
@@ -140,21 +139,21 @@ impl BitSet {
     }
 }
 
-impl<C> PacketComponent<C> for BitSet {
+impl<C: Send + Sync> PacketComponent<C> for BitSet {
     type ComponentType = BitSet;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move { BitSet::value_of(Vec::<u64>::decode(context, read).await?) })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(
             async move { Vec::<u64>::encode(&component_ref.to_long_array(), context, write).await },
         )
@@ -171,13 +170,13 @@ impl<const N: i32> FixedBitSet<N> {
     const FLOORED_SIZE: usize = (-i32::div_floor(-N, 8)) as usize;
 }
 
-impl<C, const N: i32> PacketComponent<C> for FixedBitSet<N> {
+impl<C: Send + Sync, const N: i32> PacketComponent<C> for FixedBitSet<N> {
     type ComponentType = BitSet;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         _: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let mut bytes = vec![0; Self::FLOORED_SIZE];
             read.read_exact(&mut bytes).await?;
@@ -185,11 +184,11 @@ impl<C, const N: i32> PacketComponent<C> for FixedBitSet<N> {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         _: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = drax::prelude::Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             write
                 .write_all(&component_ref.to_byte_array()[0..Self::FLOORED_SIZE])

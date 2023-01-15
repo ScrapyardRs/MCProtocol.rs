@@ -1,15 +1,13 @@
-use std::future::Future;
-use std::pin::Pin;
-
-use crate::common::bit_storage::{BitSetValidationError, BitStorage};
-use crate::common::play::ceil_log_2;
 use drax::nbt::{EnsuredCompoundTag, Tag};
 use drax::prelude::{
     AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxReadExt, DraxWriteExt, PacketComponent,
     Result, Size, TransportError,
 };
 use drax::transport::buffer::var_num::size_var_int;
-use drax::{err_explain, throw_explain};
+use drax::{err_explain, throw_explain, PinnedLivelyResult};
+
+use crate::common::bit_storage::{BitSetValidationError, BitStorage};
+use crate::common::play::ceil_log_2;
 
 pub enum Index {
     NewSize(u8),
@@ -215,7 +213,10 @@ impl PaletteContainer {
         self.storage.get_and_set(index, block_mapping)
     }
 
-    pub async fn serialize<W: AsyncWrite + Unpin + ?Sized>(&self, write: &mut W) -> Result<()> {
+    pub async fn serialize<W: AsyncWrite + Unpin + Send + Sync + ?Sized>(
+        &self,
+        write: &mut W,
+    ) -> Result<()> {
         write.write_u8(self.bits_per_entry).await?;
         match &self.palette {
             Palette::SingleValue { block_type_id } => {
@@ -238,7 +239,7 @@ impl PaletteContainer {
         self.storage.check_size().map(|x| x + size)
     }
 
-    pub async fn deserialize_with_strategy<R: AsyncRead + Unpin + ?Sized>(
+    pub async fn deserialize_with_strategy<R: AsyncRead + Unpin + Send + Sync + ?Sized>(
         strategy: Strategy,
         read: &mut R,
     ) -> Result<Self> {
@@ -372,13 +373,13 @@ impl ChunkSection {
     }
 }
 
-impl<C> PacketComponent<C> for ChunkSection {
+impl<C: Send + Sync> PacketComponent<C> for ChunkSection {
     type ComponentType = ChunkSection;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let block_count = u16::decode(context, read).await?;
             let states =
@@ -392,11 +393,11 @@ impl<C> PacketComponent<C> for ChunkSection {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             u16::encode(&component_ref.block_count, context, write).await?;
             component_ref.states.serialize(write).await?;
@@ -420,12 +421,18 @@ pub struct HeightMaps {
 }
 
 impl HeightMaps {
-    async fn encode<A: AsyncWrite + Unpin + ?Sized>(&self, writer: &mut A) -> Result<()> {
+    async fn encode<A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
+        &self,
+        writer: &mut A,
+    ) -> Result<()> {
         EnsuredCompoundTag::<0>::encode(&self.cached_compound_tag, &mut (), writer).await?;
         Ok(())
     }
 
-    async fn decode<R: AsyncRead + Unpin + ?Sized>(read: &mut R, height: i32) -> Result<Self>
+    async fn decode<R: AsyncRead + Unpin + Send + Sync + ?Sized>(
+        read: &mut R,
+        height: i32,
+    ) -> Result<Self>
     where
         Self: Sized,
     {
@@ -675,13 +682,13 @@ impl Chunk {
     }
 }
 
-impl<C> PacketComponent<C> for Chunk {
+impl<C: Send + Sync> PacketComponent<C> for Chunk {
     type ComponentType = Chunk;
 
-    fn decode<'a, A: AsyncRead + Unpin + ?Sized>(
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
         context: &'a mut C,
         read: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = Result<Self::ComponentType>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
         Box::pin(async move {
             let chunk_x = i32::decode(context, read).await?;
             let chunk_z = i32::decode(context, read).await?;
@@ -707,11 +714,11 @@ impl<C> PacketComponent<C> for Chunk {
         })
     }
 
-    fn encode<'a, A: AsyncWrite + Unpin + ?Sized>(
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
         component_ref: &'a Self::ComponentType,
         context: &'a mut C,
         write: &'a mut A,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
+    ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             i32::encode(&component_ref.chunk_x, context, write).await?;
             i32::encode(&component_ref.chunk_z, context, write).await?;
