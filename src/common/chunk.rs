@@ -556,6 +556,10 @@ impl Chunk {
         Self::using_world_height(x, z, DEFAULT_WORLD_MIN, DEFAULT_WORLD_HEIGHT)
     }
 
+    pub fn pos(&self) -> (i32, i32) {
+        (self.chunk_x, self.chunk_z)
+    }
+
     pub fn clone_for(&self, x: i32, z: i32) -> Self {
         Self {
             min_height: self.min_height,
