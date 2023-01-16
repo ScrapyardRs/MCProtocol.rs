@@ -59,7 +59,7 @@ impl Registry {
         let mut reg = Registry::default();
         let items: Vec<RegistryItem> = serde_json::from_slice(slice).unwrap();
         for item in items {
-            reg.register(item.key, item.idx);
+            reg.register(format!("minecraft:{}", item.key), item.idx);
         }
         reg
     }
