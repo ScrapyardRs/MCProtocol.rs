@@ -78,7 +78,7 @@ impl Strategy {
 }
 
 // todo: update palette to take a "state"?
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Palette {
     SingleValue { block_type_id: i32 },
     Indirect { palette: Vec<i32> },
@@ -130,7 +130,7 @@ impl Palette {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PaletteContainer {
     bits_per_entry: u8,
     palette: Palette,
@@ -319,7 +319,7 @@ impl PaletteContainer {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChunkSection {
     block_count: u16,
     states: PaletteContainer,
@@ -413,7 +413,7 @@ impl<C: Send + Sync> PacketComponent<C> for ChunkSection {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HeightMaps {
     world_surface: BitStorage,
     motion_blocking: BitStorage,
@@ -554,6 +554,17 @@ const DEFAULT_WORLD_HEIGHT: i32 = 320;
 impl Chunk {
     pub fn new(x: i32, z: i32) -> Self {
         Self::using_world_height(x, z, DEFAULT_WORLD_MIN, DEFAULT_WORLD_HEIGHT)
+    }
+
+    pub fn clone_for(&self, x: i32, z: i32) -> Self {
+        Self {
+            min_height: self.min_height,
+            max_height: self.max_height,
+            chunk_x: x,
+            chunk_z: z,
+            height_maps: self.height_maps.clone(),
+            chunk_sections: self.chunk_sections.clone(),
+        }
     }
 
     pub fn using_world_height(x: i32, z: i32, min_height: i32, max_height: i32) -> Chunk {
