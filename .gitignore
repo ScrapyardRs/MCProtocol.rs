@@ -1,6 +1,4 @@
-/target
+target/
 /Cargo.lock
 
-/.idea/
-/old/
-/old2/
+.idea/

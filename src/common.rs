@@ -23,3 +23,4 @@ pub mod bit_storage;
 pub mod chat;
 pub mod chunk;
 pub mod play;
+pub mod registry;
