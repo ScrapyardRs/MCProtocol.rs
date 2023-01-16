@@ -537,7 +537,7 @@ impl HeightMaps {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Chunk {
     min_height: i32,
     max_height: i32,
