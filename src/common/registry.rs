@@ -4,6 +4,7 @@ use std::collections::HashMap;
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, Ord, PartialOrd)]
 pub enum RegistryKey {
     Blocks,
+    BlockStates,
 }
 
 pub struct GlobalRegistry {
@@ -16,6 +17,10 @@ impl GlobalRegistry {
         registries.insert(
             RegistryKey::Blocks,
             Registry::from_json_bytes(include_bytes!("./registry/blocks.json")),
+        );
+        registries.insert(
+            RegistryKey::BlockStates,
+            Registry::from_json_bytes(include_bytes!("./registry/block_states.json")),
         );
         GlobalRegistry { registries }
     }
