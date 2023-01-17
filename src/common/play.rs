@@ -484,12 +484,14 @@ registry! {
             Smoker {}
         },
 
+        #[derive(Clone)]
         struct ProfilePublicKey {
             expiry: u64,
             encoded_key: VecU8,
             key_sig: VecU8
         },
 
+        #[derive(Clone)]
         struct RemoteChatSession {
             session_id: Uuid,
             key: ProfilePublicKey
