@@ -1,7 +1,7 @@
 use std::cmp::max;
 
-use drax::PinnedLivelyResult;
 use drax::prelude::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, PacketComponent, Size};
+use drax::PinnedLivelyResult;
 
 const ADDRESS_BITS_PER_WORD: i32 = 6;
 
@@ -121,7 +121,7 @@ impl BitSet {
 
     pub fn to_byte_array(&self) -> Vec<u8> {
         let mut extra = 0;
-        for b in self.words[self.words_in_use].to_be_bytes().iter() {
+        for b in self.words[self.words_in_use - 1].to_be_bytes().iter() {
             if *b == 0 {
                 break;
             }
@@ -134,7 +134,7 @@ impl BitSet {
             }
             bytes[idx * 8..(idx + 1) * 8].copy_from_slice(&word.to_be_bytes());
         }
-        bytes.extend_from_slice(&self.words[self.words_in_use].to_be_bytes()[..extra]);
+        bytes.extend_from_slice(&self.words[self.words_in_use - 1].to_be_bytes()[..extra]);
         bytes
     }
 }
