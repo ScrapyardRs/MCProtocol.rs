@@ -7,7 +7,6 @@ use crate::common::play::{
 };
 use crate::common::play::{RecipeBookType, RemoteChatSession};
 use crate::common::{GameProfile, GameProfileProperty};
-use crate::serverbound::play::ServerboundPlayRegistry::Chat;
 use drax::nbt::EnsuredCompoundTag;
 use drax::prelude::{
     AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxReadExt, DraxWriteExt, PacketComponent,
@@ -244,7 +243,7 @@ impl<'b> PacketComponent<PlayerInfoActionContext<'b>> for PlayerInfoAction {
             }
 
             if in_set.get(5)? {
-                counter += Maybe::<JsonDelegate<Chat>>::size(&entry.display_name, ctx)?;
+                counter = counter + Maybe::<JsonDelegate<Chat>>::size(&entry.display_name, ctx)?;
             }
 
             Ok(match counter {
