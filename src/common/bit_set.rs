@@ -94,7 +94,15 @@ impl BitSet {
 
     pub async fn from_bytes(bytes: &[u8]) -> drax::prelude::Result<Self> {
         let mut tip = bytes.len();
-        while bytes[tip - 1] == 0 && tip > 0 {
+        if tip == 0 {
+            let bit_set = BitSet {
+                words: vec![],
+                words_in_use: 0,
+            };
+            bit_set.assert_invariants()?;
+            return Ok(bit_set);
+        }
+        while tip > 0 && bytes[tip - 1] == 0 {
             tip -= 1;
         }
         let bytes = &bytes[..tip];
@@ -113,10 +121,12 @@ impl BitSet {
             words[idx] |= (*x as u64 & 0xff) << (8 * idx2 as u64);
         }
 
-        Ok(BitSet {
+        let bit_set = BitSet {
             words_in_use: words.len(),
             words,
-        })
+        };
+        bit_set.assert_invariants()?;
+        return Ok(bit_set);
     }
 
     pub async fn to_byte_array(&self) -> drax::prelude::Result<Vec<u8>> {
