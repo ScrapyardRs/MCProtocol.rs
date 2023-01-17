@@ -7,6 +7,7 @@ use crate::common::play::{
 };
 use crate::common::play::{RecipeBookType, RemoteChatSession};
 use crate::common::{GameProfile, GameProfileProperty};
+use crate::serverbound::play::ServerboundPlayRegistry::Chat;
 use drax::nbt::EnsuredCompoundTag;
 use drax::prelude::{
     AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxReadExt, DraxWriteExt, PacketComponent,
@@ -123,7 +124,7 @@ impl<'b> PacketComponent<PlayerInfoActionContext<'b>> for PlayerInfoAction {
                 }
 
                 if in_set.get(5)? {
-                    entry.display_name = Some(JsonDelegate::<Chat>::decode(ctx, read).await?)
+                    entry.display_name = Maybe::<JsonDelegate<Chat>>::decode(ctx, read).await?
                 }
                 Ok(())
             }
@@ -182,11 +183,7 @@ impl<'b> PacketComponent<PlayerInfoActionContext<'b>> for PlayerInfoAction {
                 }
 
                 if in_set.get(5)? {
-                    if let Some(display_name) = entry.display_name.as_ref() {
-                        JsonDelegate::<Chat>::encode(display_name, ctx, write).await?;
-                    } else {
-                        throw_explain!("Missing display name with update display name bit set.")
-                    }
+                    Maybe::<JsonDelegate<Chat>>::encode(&entry.display_name, ctx, write).await?;
                 }
 
                 Ok(())
@@ -247,11 +244,7 @@ impl<'b> PacketComponent<PlayerInfoActionContext<'b>> for PlayerInfoAction {
             }
 
             if in_set.get(5)? {
-                if let Some(display_name) = entry.display_name.as_ref() {
-                    counter = counter + JsonDelegate::<Chat>::size(display_name, ctx)?;
-                } else {
-                    throw_explain!("Missing display name with update display name bit set.")
-                }
+                counter += Maybe::<JsonDelegate<Chat>>::size(&entry.display_name, ctx)?;
             }
 
             Ok(match counter {
