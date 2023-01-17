@@ -40,7 +40,7 @@ const fn log2(n: i32) -> i32 {
     ceil_log_2(n) - if is_power_of_2(n) { 0i32 } else { 1i32 }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct BlockPos {
     pub x: i32,
     pub y: i32,
@@ -495,12 +495,14 @@ registry! {
             key: ProfilePublicKey
         },
 
+        #[derive(Clone, Copy, PartialEq)]
         struct SimpleLocation {
             x: f64,
             y: f64,
             z: f64
         },
 
+        #[derive(Clone, Copy, PartialEq)]
         struct Location {
             inner_loc: SimpleLocation,
             yaw: f32,
@@ -513,16 +515,19 @@ registry! {
             tag: EnsuredCompoundTag<0>
         },
 
+        #[derive(Clone)]
         struct GlobalPos {
             dimension: String,
             pos: BlockPos
         },
 
+        #[derive(Clone, Copy)]
         enum InteractionHand<key: VarInt> {
             MainHand {},
             OffHand {}
         },
 
+        #[derive(Clone, Copy)]
         enum Difficulty<key: u8> {
             Peaceful {},
             Easy {},
