@@ -198,7 +198,7 @@ impl<'b> PacketComponent<PlayerInfoActionContext<'b>> for PlayerInfoAction {
             let ctx = &mut ();
             let (in_set, entry) = context.encode_context;
 
-            let mut counter = Uuid::size(&entry.profile_id, ctx)?;
+            let mut counter = 0;
 
             if in_set.get(0)? {
                 if let Some(profile) = entry.profile.as_ref() {
