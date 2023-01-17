@@ -129,11 +129,18 @@ impl BitSet {
             }
             extra += 1;
         }
+
+        println!("Found extra {}", extra);
         let mut bytes = vec![0; ((self.words_in_use - 1) * 8) + extra];
+        println!("Bytes: {:?} ({})", bytes, bytes.len());
+
         for (idx, word) in self.words.iter().enumerate() {
+            println!("Decoding {}, {}", idx, word);
             if idx == (self.words_in_use - 1) {
+                println!("BREAK OUT LAST");
                 break;
             }
+            println!("Copying full buffer.");
             bytes[idx * 8..(idx + 1) * 8].copy_from_slice(&word.to_be_bytes());
         }
         bytes.extend_from_slice(&self.words[self.words_in_use - 1].to_be_bytes()[..extra]);
