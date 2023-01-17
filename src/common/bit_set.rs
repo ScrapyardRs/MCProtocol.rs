@@ -121,6 +121,10 @@ impl BitSet {
 
     pub fn to_byte_array(&self) -> Vec<u8> {
         println!("ENCODING {:?}, {:?}", self.words, self.words_in_use);
+        println!(
+            "Raw be bytes: {:?}",
+            self.words[self.words_in_use - 1].to_be_bytes()
+        );
 
         let mut extra = 0;
         for b in self.words[self.words_in_use - 1].to_be_bytes().iter() {
