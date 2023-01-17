@@ -152,6 +152,24 @@ impl BitSet {
         }
         Ok(cursor.into_inner())
     }
+
+    fn bit_count(mut i: u64) -> i32 {
+        i = i - ((i >> 1) & 0x5555555555555555);
+        i = (i & 0x3333333333333333) + ((i >> 2) & 0x3333333333333333);
+        i = (i + (i >> 4)) & 0x0f0f0f0f0f0f0f0f;
+        i = i + (i >> 8);
+        i = i + (i >> 16);
+        i = i + (i >> 32);
+        return (i & 0x7f) as i32;
+    }
+
+    pub fn cardinality(&self) -> i32 {
+        let mut sum = 0;
+        for i in 0..self.words_in_use {
+            sum += Self::bit_count(self.words[i]);
+        }
+        sum
+    }
 }
 
 impl<C: Send + Sync> PacketComponent<C> for BitSet {
