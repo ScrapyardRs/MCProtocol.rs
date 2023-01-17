@@ -120,6 +120,8 @@ impl BitSet {
     }
 
     pub fn to_byte_array(&self) -> Vec<u8> {
+        println!("ENCODING {:?}, {:?}", self.words, self.words_in_use);
+
         let mut extra = 0;
         for b in self.words[self.words_in_use - 1].to_be_bytes().iter() {
             if *b == 0 {
@@ -129,7 +131,7 @@ impl BitSet {
         }
         let mut bytes = vec![0; ((self.words_in_use - 1) * 8) + extra];
         for (idx, word) in self.words.iter().enumerate() {
-            if idx == self.words_in_use {
+            if idx == (self.words_in_use - 1) {
                 break;
             }
             bytes[idx * 8..(idx + 1) * 8].copy_from_slice(&word.to_be_bytes());
