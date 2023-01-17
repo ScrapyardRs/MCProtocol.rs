@@ -123,11 +123,11 @@ impl BitSet {
         println!("ENCODING {:?}, {:?}", self.words, self.words_in_use);
         println!(
             "Raw be bytes: {:?}",
-            self.words[self.words_in_use - 1].to_be_bytes()
+            self.words[self.words_in_use - 1].to_le_bytes()
         );
 
         let mut extra = 0;
-        for b in self.words[self.words_in_use - 1].to_be_bytes().iter() {
+        for b in self.words[self.words_in_use - 1].to_le_bytes().iter() {
             if *b == 0 {
                 break;
             }
@@ -145,9 +145,11 @@ impl BitSet {
                 break;
             }
             println!("Copying full buffer.");
-            bytes[idx * 8..(idx + 1) * 8].copy_from_slice(&word.to_be_bytes());
+            bytes[idx * 8..(idx + 1) * 8].copy_from_slice(&word.to_le_bytes());
         }
-        bytes.extend_from_slice(&self.words[self.words_in_use - 1].to_be_bytes()[..extra]);
+        if extra > 0 {
+            bytes.extend_from_slice(&self.words[self.words_in_use - 1].to_le_bytes()[..extra]);
+        }
         bytes
     }
 }
