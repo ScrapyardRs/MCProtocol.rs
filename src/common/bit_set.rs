@@ -1,4 +1,5 @@
 use std::cmp::max;
+use std::io::Cursor;
 
 use drax::prelude::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, PacketComponent, Size};
 use drax::PinnedLivelyResult;
@@ -91,66 +92,55 @@ impl BitSet {
         self.words[..self.words_in_use].to_vec()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> drax::prelude::Result<BitSet> {
-        let used_bits = bytes.iter().rposition(|x| *x != 0).unwrap_or(0);
-        let mut words = vec![0; (used_bits + 7) / 8];
-        let mut iter = bytes.iter();
-        while {
-            match iter.next_chunk::<8>() {
-                Ok(chunk) => {
-                    words.push(u64::from_be_bytes(chunk.map(|x| *x)));
-                    true
-                }
-                Err(remaining) => {
-                    let mut b: u64 = 0;
-                    for (idx, item) in remaining.enumerate() {
-                        b |= (*item as u64 & 0xffu64) << (8 * (idx as u64))
-                    }
-                    words.push(b);
-                    false
-                }
-            }
-        } {}
-        let bit_set = BitSet {
+    pub async fn from_bytes(bytes: &[u8]) -> drax::prelude::Result<Self> {
+        let mut tip = bytes.len();
+        while bytes[tip - 1] == 0 && tip > 0 {
+            tip -= 1;
+        }
+        let bytes = &bytes[..tip];
+        let len = bytes.len();
+        let mut cursor = Cursor::new(bytes);
+        let mut idx = 0;
+        let mut words = vec![0u64; (tip + 7) / 8];
+        while len - cursor.position() as usize >= 8 {
+            let n_long = cursor.read_u64_le().await?;
+            words[idx] = n_long;
+            idx += 1;
+        }
+        let mut remaining = vec![0u8; tip % 8];
+        cursor.read_exact(&mut remaining).await?;
+        for (idx2, x) in remaining.iter().enumerate() {
+            words[idx] |= (*x as u64 & 0xff) << (8 * idx2 as u64);
+        }
+
+        Ok(BitSet {
             words_in_use: words.len(),
             words,
-        };
-        bit_set.assert_invariants()?;
-        Ok(bit_set)
+        })
     }
 
-    pub fn to_byte_array(&self) -> Vec<u8> {
-        println!("ENCODING {:?}, {:?}", self.words, self.words_in_use);
-        println!(
-            "Raw be bytes: {:?}",
-            self.words[self.words_in_use - 1].to_le_bytes()
-        );
-
-        let mut extra = 0;
-        for b in self.words[self.words_in_use - 1].to_le_bytes().iter() {
-            if *b == 0 {
-                break;
-            }
-            extra += 1;
+    pub async fn to_byte_array(&self) -> drax::prelude::Result<Vec<u8>> {
+        let n = self.words_in_use;
+        if n == 0 {
+            return Ok(vec![]);
         }
-
-        println!("Found extra {}", extra);
-        let mut bytes = vec![0; ((self.words_in_use - 1) * 8) + extra];
-        println!("Bytes: {:?} ({})", bytes, bytes.len());
-
-        for (idx, word) in self.words.iter().enumerate() {
-            println!("Decoding {}, {}", idx, word);
-            if idx == (self.words_in_use - 1) {
-                println!("BREAK OUT LAST");
-                break;
-            }
-            println!("Copying full buffer.");
-            bytes[idx * 8..(idx + 1) * 8].copy_from_slice(&word.to_le_bytes());
+        let mut len = 8 * (n - 1);
+        let mut x = self.words[n - 1];
+        while x != 0 {
+            x >>= 8;
+            len += 1;
         }
-        if extra > 0 {
-            bytes.extend_from_slice(&self.words[self.words_in_use - 1].to_le_bytes()[..extra]);
+        let ret = vec![0u8; len];
+        let mut cursor = Cursor::new(ret);
+        for i in 0..n - 1 {
+            cursor.write_u64_le(self.words[i]).await?;
         }
-        bytes
+        let mut x = self.words[n - 1];
+        while x != 0 {
+            cursor.write_u8((x & 0xff) as u8).await?;
+            x >>= 8;
+        }
+        Ok(cursor.into_inner())
     }
 }
 
@@ -195,7 +185,7 @@ impl<C: Send + Sync, const N: i32> PacketComponent<C> for FixedBitSet<N> {
         Box::pin(async move {
             let mut bytes = vec![0; Self::FLOORED_SIZE];
             read.read_exact(&mut bytes).await?;
-            BitSet::from_bytes(&bytes)
+            BitSet::from_bytes(&bytes).await
         })
     }
 
@@ -206,7 +196,7 @@ impl<C: Send + Sync, const N: i32> PacketComponent<C> for FixedBitSet<N> {
     ) -> PinnedLivelyResult<'a, ()> {
         Box::pin(async move {
             write
-                .write_all(&component_ref.to_byte_array()[0..Self::FLOORED_SIZE])
+                .write_all(&component_ref.to_byte_array().await?[0..Self::FLOORED_SIZE])
                 .await?;
             Ok(())
         })
