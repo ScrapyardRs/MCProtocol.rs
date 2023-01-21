@@ -4,7 +4,9 @@ use drax::prelude::{
     Result, Size, TransportError,
 };
 use drax::transport::buffer::var_num::size_var_int;
-use drax::{err_explain, throw_explain, PinnedLivelyResult};
+use drax::transport::packet::option::Maybe;
+use drax::{components, err_explain, throw_explain, PinnedLivelyResult};
+use std::collections::HashMap;
 
 use crate::common::bit_storage::{BitSetValidationError, BitStorage};
 use crate::common::play::ceil_log_2;
@@ -23,7 +25,7 @@ impl Index {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Strategy {
     Section,
     Biome,
@@ -78,7 +80,7 @@ impl Strategy {
 }
 
 // todo: update palette to take a "state"?
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Palette {
     SingleValue { block_type_id: i32 },
     Indirect { palette: Vec<i32> },
@@ -130,7 +132,7 @@ impl Palette {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PaletteContainer {
     bits_per_entry: u8,
     palette: Palette,
@@ -319,7 +321,7 @@ impl PaletteContainer {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ChunkSection {
     block_count: u16,
     states: PaletteContainer,
@@ -413,7 +415,7 @@ impl<C: Send + Sync> PacketComponent<C> for ChunkSection {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HeightMaps {
     world_surface: BitStorage,
     motion_blocking: BitStorage,
@@ -537,7 +539,7 @@ impl HeightMaps {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Chunk {
     min_height: i32,
     max_height: i32,
@@ -554,6 +556,14 @@ const DEFAULT_WORLD_HEIGHT: i32 = 320;
 impl Chunk {
     pub fn new(x: i32, z: i32) -> Self {
         Self::using_world_height(x, z, DEFAULT_WORLD_MIN, DEFAULT_WORLD_HEIGHT)
+    }
+
+    pub fn x(&self) -> i32 {
+        self.chunk_x
+    }
+
+    pub fn z(&self) -> i32 {
+        self.chunk_z
     }
 
     pub fn pos(&self) -> (i32, i32) {
@@ -772,5 +782,69 @@ impl<C: Send + Sync> PacketComponent<C> for Chunk {
                 Size::Dynamic(x) | Size::Constant(x) => x,
             } as i32);
         Ok(size)
+    }
+}
+
+components! {
+    struct BasicRegion {
+        offset_x: i32,
+        offset_z: i32,
+        chunks: [[Maybe<Chunk>; 32]; 32]
+    }
+}
+
+impl BasicRegion {
+    pub fn new(offset_x: i32, offset_z: i32) -> Self {
+        Self {
+            offset_x,
+            offset_z,
+            chunks: [[Option::<()>::None; 32]; 32].map(|x| x.map(|_| None)),
+        }
+    }
+
+    pub fn insert_chunk(&mut self, chunk: Chunk) {
+        let x = chunk.chunk_x;
+        let z = chunk.chunk_z;
+        self.chunks[x as usize][z as usize] = Some(chunk);
+    }
+}
+
+struct CachedLevel {
+    chunk_cache: HashMap<(i32, i32), Chunk>,
+}
+
+impl CachedLevel {
+    pub fn clone_cached_or_insert(&mut self, x: i32, z: i32) -> Chunk {
+        if self.chunk_cache.contains_key(&(x, z)) {
+            self.chunk_cache.get(&(x, z)).cloned().unwrap()
+        } else {
+            let new_chunk = Chunk::new(x, z);
+            self.chunk_cache.insert((x, z), new_chunk.clone());
+            new_chunk
+        }
+    }
+
+    pub fn clone_cached(&self, x: i32, z: i32) -> Chunk {
+        if self.chunk_cache.contains_key(&(x, z)) {
+            self.chunk_cache.get(&(x, z)).cloned().unwrap()
+        } else {
+            Chunk::new(x, z)
+        }
+    }
+
+    pub fn insert_region(&mut self, region: BasicRegion) {
+        for region_x in region.chunks {
+            for chunk in region_x {
+                if let Some(chunk) = chunk {
+                    self.chunk_cache.insert(
+                        (
+                            (region.offset_x * 32) + chunk.chunk_x,
+                            (region.offset_z * 32) + chunk.chunk_z,
+                        ),
+                        chunk,
+                    );
+                }
+            }
+        }
     }
 }

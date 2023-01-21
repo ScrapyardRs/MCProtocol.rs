@@ -3,13 +3,13 @@ use drax::transport::packet::primitive::VarInt;
 use drax::{err_explain, throw_explain};
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BitStorage {
     ZeroStorage { size: i32, raw: Vec<i64> },
     SimpleStorage { size: i32, bits: i32, raw: Vec<i64> },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BitSetValidationError(pub String);
 
 impl std::error::Error for BitSetValidationError {}
