@@ -256,14 +256,14 @@ registry! {
             x: f64,
             y: f64,
             z: f64,
-            x_rot: f32,
             y_rot: f32,
+            x_rot: f32,
             on_ground: bool
         },
 
         struct MovePlayerRot {
-            x_rot: f32,
             y_rot: f32,
+            x_rot: f32,
             on_ground: bool
         },
 

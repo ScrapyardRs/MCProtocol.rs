@@ -265,7 +265,7 @@ impl From<&str> for Chat {
 }
 
 impl Chat {
-    fn base_mute(&mut self) -> Option<&mut BaseChat> {
+    fn base_mut(&mut self) -> Option<&mut BaseChat> {
         match self {
             Chat::Text { base, .. } => Some(base),
             Chat::Translatable { base, .. } => Some(base),
@@ -278,7 +278,7 @@ impl Chat {
     }
 
     pub fn extra(&mut self, extra: Vec<Chat>) {
-        let mut base_mut = match self.base_mute() {
+        let mut base_mut = match self.base_mut() {
             None => return,
             Some(x) => x,
         };
@@ -294,7 +294,7 @@ impl Chat {
     }
 
     pub fn push_extra(&mut self, extra: Chat) {
-        let base_mut = match self.base_mute() {
+        let base_mut = match self.base_mut() {
             None => return,
             Some(x) => x,
         };
@@ -302,7 +302,7 @@ impl Chat {
     }
 
     pub fn clear_extra(&mut self) {
-        let base_mut = match self.base_mute() {
+        let base_mut = match self.base_mut() {
             None => return,
             Some(x) => x,
         };
@@ -318,7 +318,7 @@ impl Chat {
     }
 
     pub fn append_extra(&mut self, extra: Vec<Chat>) {
-        let base_mut = match self.base_mute() {
+        let base_mut = match self.base_mut() {
             None => return,
             Some(x) => x,
         };
@@ -326,7 +326,7 @@ impl Chat {
     }
 
     pub fn modify_style<F: FnOnce(&mut Style) -> &mut Style>(&mut self, func: F) {
-        let base_mut = match self.base_mute() {
+        let base_mut = match self.base_mut() {
             None => return,
             Some(x) => x,
         };
@@ -334,7 +334,7 @@ impl Chat {
     }
 
     pub fn click_event(&mut self, click_event: ClickEvent) {
-        let base_mut = match self.base_mute() {
+        let base_mut = match self.base_mut() {
             None => return,
             Some(x) => x,
         };
@@ -342,7 +342,7 @@ impl Chat {
     }
 
     pub fn hover_event(&mut self, hover_event: HoverEvent) {
-        let base_mut = match self.base_mute() {
+        let base_mut = match self.base_mut() {
             None => return,
             Some(x) => x,
         };
@@ -360,10 +360,7 @@ impl Chat {
         }
     }
 
-    pub fn translatable<S: Into<String>>(
-        translatable: S,
-        with: Option<Vec<Box<Self>>>,
-    ) -> Self {
+    pub fn translatable<S: Into<String>>(translatable: S, with: Option<Vec<Box<Self>>>) -> Self {
         Self::Translatable {
             translatable: translatable.into(),
             with,
