@@ -809,7 +809,7 @@ impl BasicRegion {
     }
 }
 
-struct CachedLevel {
+pub struct CachedLevel {
     chunk_cache: HashMap<(i32, i32), Chunk>,
 }
 
