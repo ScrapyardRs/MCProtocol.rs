@@ -688,6 +688,33 @@ impl<C: Send + Sync> PacketComponent<C> for ShapedRecipeBase {
 
 registry! {
     components {
+        enum MenuType<key: VarInt> {
+            Generic9x1 {},
+            Generic9x2 {},
+            Generic9x3 {},
+            Generic9x4 {},
+            Generic9x5 {},
+            Generic9x6 {},
+            Generic3x3 {},
+            Anvil {},
+            Bacon {},
+            BlastFurnace {},
+            BrewingStand {},
+            Crafting {},
+            Enchantment {},
+            Furnace {},
+            Grindstone {},
+            Hopper {},
+            Lectern {},
+            Loom {},
+            Merchant {},
+            ShulkerBox {},
+            Smithing {},
+            Smoker {},
+            CartographyTable {},
+            StoneCutter {}
+        },
+
         struct StatsEntry {
             stat_id: VarInt,
             stat_cap: VarInt,
@@ -1771,7 +1798,7 @@ registry! {
 
         struct OpenScreen {
             container_id: VarInt,
-            container_type: VarInt,
+            container_type: MenuType,
             title: JsonDelegate<Chat>
         },
 
