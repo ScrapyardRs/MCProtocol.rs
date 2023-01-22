@@ -31,6 +31,7 @@ registry! {
             signature: MessageSignature
         },
 
+        #[derive(Clone)]
         struct ContainerSlot {
             index: u16,
             item: Maybe<ItemStack>
