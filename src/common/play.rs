@@ -511,6 +511,7 @@ registry! {
             pitch: f32
         },
 
+        #[derive(Clone)]
         struct ItemStack {
             item_id: VarInt,
             item_data: u8,
