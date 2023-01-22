@@ -114,27 +114,27 @@ impl HoverEvent {
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Style {
     #[serde(skip_serializing_if = "Option::is_none")]
-    color: Option<String>,
+    pub color: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    bold: Option<bool>,
+    pub bold: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    italic: Option<bool>,
+    pub italic: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    underlined: Option<bool>,
+    pub underlined: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    strikethrough: Option<bool>,
+    pub strikethrough: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    obfuscated: Option<bool>,
+    pub obfuscated: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    insertion: Option<String>,
+    pub insertion: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    font: Option<String>,
+    pub font: Option<String>,
     #[serde(rename = "hoverEvent")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    hover_event: Option<HoverEvent>,
+    pub hover_event: Option<HoverEvent>,
     #[serde(rename = "clickEvent")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    click_event: Option<ClickEvent>,
+    pub click_event: Option<ClickEvent>,
 }
 
 impl Style {
@@ -192,13 +192,13 @@ impl Style {
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct BaseChat {
     #[serde(skip_serializing_if = "Option::is_none")]
-    extra: Option<Vec<Chat>>,
+    pub extra: Option<Vec<Chat>>,
     #[serde(flatten)]
-    style: Style,
+    pub style: Style,
     #[serde(skip_serializing_if = "Option::is_none")]
-    click_event: Option<ClickEvent>,
+    pub click_event: Option<ClickEvent>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    hover_event: Option<HoverEvent>,
+    pub hover_event: Option<HoverEvent>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
