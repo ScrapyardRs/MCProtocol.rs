@@ -688,6 +688,7 @@ impl<C: Send + Sync> PacketComponent<C> for ShapedRecipeBase {
 
 registry! {
     components {
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum MenuType<key: VarInt> {
             Generic9x1 {},
             Generic9x2 {},
@@ -721,6 +722,7 @@ registry! {
             stat_value: VarInt
         },
 
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum BossBarColor<key: VarInt> {
             Pink {},
             Blue {},
@@ -731,6 +733,7 @@ registry! {
             White {}
         },
 
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum BossBarOverlay<key: VarInt> {
             Progress {},
             Notched6 {},
@@ -767,12 +770,14 @@ registry! {
             tooltip: Maybe<JsonDelegate<Chat>>
         },
 
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum CustomChatCompletionsAction<key: VarInt> {
             Add {},
             Remove {},
             Set {}
         },
 
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum MapDecorationType<key: VarInt> {
             Player {},
             Frame {},
@@ -832,6 +837,7 @@ registry! {
             }
         },
 
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum Anchor<key: VarInt> {
             Feet {},
             Eyes {}
@@ -879,6 +885,7 @@ registry! {
             Head {}
         },
 
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum RenderType<key: VarInt> {
             Integer {},
             Hearts {}
@@ -896,6 +903,7 @@ registry! {
             }
         },
 
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum ChatFormatting<key: VarInt> {
             Black {},
             DarkBlue {},
@@ -959,6 +967,7 @@ registry! {
             }
         },
 
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum SoundSource<key: VarInt> {
             Master {},
             Music {},
@@ -986,6 +995,7 @@ registry! {
             }
         },
 
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum FrameType<key: u8> {
             Task {},
             Challenge {},
@@ -1020,6 +1030,7 @@ registry! {
             progress: Vec<CriterionProgress>
         },
 
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum AttributeSnapshotModifierOperation<key: u8> {
             Addition {},
             MulitplyBase {},
@@ -1038,6 +1049,7 @@ registry! {
             modifiers: Vec<AttributeSnapshotModifier>
         },
 
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         enum CraftingBookCategory<key: VarInt> {
             Building {},
             Redstone {},
@@ -1202,6 +1214,7 @@ registry! {
             count: i32
         },
 
+        #[derive(Copy, Clone, PartialEq, PartialOrd)]
         enum PositionSource<key: String> {
             @ser_delegate DelegateStr,
             @match {key.as_str()},

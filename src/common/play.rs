@@ -40,7 +40,7 @@ const fn log2(n: i32) -> i32 {
     ceil_log_2(n) - if is_power_of_2(n) { 0i32 } else { 1i32 }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct BlockPos {
     pub x: i32,
     pub y: i32,
