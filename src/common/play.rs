@@ -511,7 +511,7 @@ registry! {
             pitch: f32
         },
 
-        #[derive(Clone)]
+        #[derive(Clone, PartialEq)]
         struct ItemStack {
             item_id: VarInt,
             count: u8,
