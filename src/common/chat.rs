@@ -523,21 +523,21 @@ impl ChatBuilder {
         }
     }
 
-    pub fn extra(mut self, extra: Vec<Chat>) -> Self {
+    pub fn extra<C: Into<Chat>>(mut self, extra: Vec<C>) -> Self {
         let mut base_mut = match self.base_mut() {
             None => return self,
             Some(x) => x,
         };
-        base_mut.extra = Some(extra);
+        base_mut.extra = Some(extra.into_iter().map(|x| x.into()).collect());
         self
     }
 
-    pub fn push_extra(mut self, extra: Chat) -> Self {
+    pub fn push_extra<C: Into<Chat>>(mut self, extra: C) -> Self {
         let base_mut = match self.base_mut() {
             None => return self,
             Some(x) => x,
         };
-        Chat::push_extra_single(base_mut, extra);
+        Chat::push_extra_single(base_mut, extra.into());
         self
     }
 
@@ -550,12 +550,12 @@ impl ChatBuilder {
         self
     }
 
-    pub fn append_extra(mut self, extra: Vec<Chat>) -> Self {
+    pub fn append_extra<C: Into<Chat>>(mut self, extra: Vec<C>) -> Self {
         let base_mut = match self.base_mut() {
             None => return self,
             Some(x) => x,
         };
-        Chat::append_extra_single(base_mut, extra);
+        Chat::append_extra_single(base_mut, extra.into_iter().map(|x| x.into()).collect());
         self
     }
 
@@ -588,10 +588,13 @@ impl ChatBuilder {
         }
     }
 
-    pub fn translatable<S: Into<String>>(translatable: S, with: Option<Vec<Box<Chat>>>) -> Self {
+    pub fn translatable<S: Into<String>, C: Into<Chat>>(
+        translatable: S,
+        with: Option<Vec<Box<C>>>,
+    ) -> Self {
         Self::Translatable {
             translatable: translatable.into(),
-            with,
+            with: with.map(|x| x.into_iter().map(|x| Box::new((*x).into())).collect()),
             base: BaseChat::default(),
         }
     }
@@ -603,10 +606,13 @@ impl ChatBuilder {
         }
     }
 
-    pub fn selector<S: Into<String>>(selector: S, separator: Option<Box<Chat>>) -> Self {
+    pub fn selector<S: Into<String>, C: Into<Chat>>(
+        selector: S,
+        separator: Option<Box<C>>,
+    ) -> Self {
         Self::Selector {
             selector: selector.into(),
-            separator,
+            separator: separator.map(|x| Box::new((*x).into())),
             base: BaseChat::default(),
         }
     }
