@@ -809,6 +809,7 @@ impl BasicRegion {
     }
 }
 
+#[derive(Default)]
 pub struct CachedLevel {
     chunk_cache: HashMap<(i32, i32), Chunk>,
 }
