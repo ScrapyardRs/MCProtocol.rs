@@ -402,4 +402,304 @@ impl Chat {
             base: BaseChat::default(),
         }
     }
+
+    pub fn color<S: Into<String>>(&mut self, color: S) {
+        self.modify_style(move |style| style.color(color));
+    }
+
+    pub fn bold(&mut self, bold: bool) {
+        self.modify_style(move |style| style.bold(bold));
+    }
+
+    pub fn italic(&mut self, italic: bool) {
+        self.modify_style(move |style| style.italic(italic));
+    }
+
+    pub fn underlined(&mut self, underlined: bool) {
+        self.modify_style(move |style| style.underlined(underlined));
+    }
+
+    pub fn strikethrough(&mut self, strikethrough: bool) {
+        self.modify_style(move |style| style.strikethrough(strikethrough));
+    }
+
+    pub fn obfuscated(&mut self, obfuscated: bool) {
+        self.modify_style(move |style| style.obfuscated(obfuscated));
+    }
+
+    pub fn insertion<S: Into<String>>(&mut self, insertion: S) {
+        self.modify_style(move |style| style.insertion(insertion));
+    }
+
+    pub fn font<S: Into<String>>(&mut self, font: S) {
+        self.modify_style(move |style| style.font(font));
+    }
+}
+
+pub enum ChatBuilder {
+    Literal(String),
+    ChatArr(Vec<Chat>),
+    Text {
+        text: String,
+        base: BaseChat,
+    },
+    Translatable {
+        translatable: String,
+        with: Option<Vec<Box<Chat>>>,
+        base: BaseChat,
+    },
+    Score {
+        score: Score,
+        base: BaseChat,
+    },
+    Selector {
+        selector: String,
+        separator: Option<Box<Chat>>,
+        base: BaseChat,
+    },
+    Keybind {
+        keybind: String,
+        base: BaseChat,
+    },
+    NbtContents {
+        nbt: String,
+        interpret: bool,
+        data_source: DataSource,
+        base: BaseChat,
+    },
+}
+
+impl Into<Chat> for ChatBuilder {
+    fn into(self) -> Chat {
+        match self {
+            ChatBuilder::Literal(literal) => Chat::Literal(literal),
+            ChatBuilder::ChatArr(arr) => Chat::ChatArr(arr),
+            ChatBuilder::Text { text, base } => Chat::Text { text, base },
+            ChatBuilder::Translatable {
+                translatable,
+                base,
+                with,
+            } => Chat::Translatable {
+                translatable,
+                base,
+                with,
+            },
+            ChatBuilder::Score { score, base } => Chat::Score { score, base },
+            ChatBuilder::Selector {
+                selector,
+                base,
+                separator,
+            } => Chat::Selector {
+                selector,
+                base,
+                separator,
+            },
+            ChatBuilder::Keybind { keybind, base } => Chat::Keybind { keybind, base },
+            ChatBuilder::NbtContents {
+                nbt,
+                base,
+                data_source,
+                interpret,
+            } => Chat::NbtContents {
+                nbt,
+                interpret,
+                data_source,
+                base,
+            },
+        }
+    }
+}
+
+impl ChatBuilder {
+    fn base_mut(&mut self) -> Option<&mut BaseChat> {
+        match self {
+            Self::Text { base, .. } => Some(base),
+            Self::Translatable { base, .. } => Some(base),
+            Self::Score { base, .. } => Some(base),
+            Self::Selector { base, .. } => Some(base),
+            Self::Keybind { base, .. } => Some(base),
+            Self::NbtContents { base, .. } => Some(base),
+            _ => None,
+        }
+    }
+
+    pub fn extra(mut self, extra: Vec<Chat>) -> Self {
+        let mut base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.extra = Some(extra);
+        self
+    }
+
+    pub fn push_extra(mut self, extra: Chat) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        Chat::push_extra_single(base_mut, extra);
+        self
+    }
+
+    pub fn clear_extra(mut self) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.extra = None;
+        self
+    }
+
+    pub fn append_extra(mut self, extra: Vec<Chat>) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        Chat::append_extra_single(base_mut, extra);
+        self
+    }
+
+    pub fn click_event(mut self, click_event: ClickEvent) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.click_event = Some(click_event);
+        self
+    }
+
+    pub fn hover_event(mut self, hover_event: HoverEvent) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.hover_event = Some(hover_event);
+        self
+    }
+
+    pub fn literal<S: Into<String>>(string: S) -> Self {
+        Self::Literal(string.into())
+    }
+
+    pub fn text<S: Into<String>>(string: S) -> Self {
+        Self::Text {
+            text: string.into(),
+            base: BaseChat::default(),
+        }
+    }
+
+    pub fn translatable<S: Into<String>>(translatable: S, with: Option<Vec<Box<Chat>>>) -> Self {
+        Self::Translatable {
+            translatable: translatable.into(),
+            with,
+            base: BaseChat::default(),
+        }
+    }
+
+    pub fn score(score: Score) -> Self {
+        Self::Score {
+            score,
+            base: BaseChat::default(),
+        }
+    }
+
+    pub fn selector<S: Into<String>>(selector: S, separator: Option<Box<Chat>>) -> Self {
+        Self::Selector {
+            selector: selector.into(),
+            separator,
+            base: BaseChat::default(),
+        }
+    }
+
+    pub fn keybind<S: Into<String>>(keybind: S) -> Self {
+        Self::Keybind {
+            keybind: keybind.into(),
+            base: BaseChat::default(),
+        }
+    }
+
+    pub fn nbt_contents<S: Into<String>>(
+        path: S,
+        interpret: bool,
+        data_source: DataSource,
+    ) -> Self {
+        Self::NbtContents {
+            nbt: path.into(),
+            interpret,
+            data_source,
+            base: BaseChat::default(),
+        }
+    }
+
+    pub fn color<S: Into<String>>(mut self, color: S) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.style.color(color);
+        self
+    }
+
+    pub fn bold(mut self, bold: bool) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.style.bold(bold);
+        self
+    }
+
+    pub fn italic(mut self, italic: bool) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.style.italic(italic);
+        self
+    }
+
+    pub fn underlined(mut self, underlined: bool) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.style.underlined(underlined);
+        self
+    }
+
+    pub fn strikethrough(mut self, strikethrough: bool) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.style.strikethrough(strikethrough);
+        self
+    }
+
+    pub fn obfuscated(mut self, obfuscated: bool) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.style.obfuscated(obfuscated);
+        self
+    }
+
+    pub fn insertion<S: Into<String>>(mut self, insertion: S) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.style.insertion(insertion);
+        self
+    }
+
+    pub fn font<S: Into<String>>(mut self, font: S) -> Self {
+        let base_mut = match self.base_mut() {
+            None => return self,
+            Some(x) => x,
+        };
+        base_mut.style.font(font);
+        self
+    }
 }
