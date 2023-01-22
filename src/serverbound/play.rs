@@ -11,11 +11,14 @@ use drax::transport::packet::vec::{ByteDrain, LimitedVec};
 
 registry! {
     components {
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum ClientCommandAction<key: VarInt> {
             PerformRespawn {},
             RequestStats {}
         },
 
+
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum PlayerAbilitiesMask<key: u8> {
             NonFlying {},
             Flying {
@@ -33,6 +36,7 @@ registry! {
             item: Maybe<ItemStack>
         },
 
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum ClickType<key: VarInt> {
             Pickup {},
             QuickMove {},
@@ -57,6 +61,7 @@ registry! {
             }
         },
 
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum PlayerActionType<key: VarInt> {
             StartDestroyBlock {},
             AbortDestroyBlock {},
@@ -67,6 +72,7 @@ registry! {
             SwapItemWithOffhand {}
         },
 
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum PlayerCommandType<key: VarInt> {
             PressShiftKey {},
             ReleaseShiftKey {},
@@ -79,6 +85,7 @@ registry! {
             StartFallFlying {}
         },
 
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum InputFlags<key: u8> {
             Neiether {},
             Jumping {},
@@ -86,6 +93,7 @@ registry! {
             ShiftKeyDownAndJumping {}
         },
 
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum ResourcePackAction<key: VarInt> {
             SuccessfullyLoaded {},
             Declined {},
@@ -93,6 +101,7 @@ registry! {
             Accepted {}
         },
 
+        #[derive(Clone, PartialEq)]
         enum SeenAdvancementsAction<key: VarInt> {
             OpenedTab {
                 tab: String
@@ -100,12 +109,14 @@ registry! {
             ClosedScreen {}
         },
 
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum SetCommandBlockMode<key: VarInt> {
             Sequence {},
             Auto {},
             Redstone {}
         },
 
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum StructureBlockUpdateType<key: VarInt> {
             UpdateData {},
             SaveArea {},
@@ -113,6 +124,7 @@ registry! {
             ScanArea {}
         },
 
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum StructureMode<key: VarInt> {
             Save {},
             Load {},
@@ -120,12 +132,14 @@ registry! {
             Data {}
         },
 
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum StructureMirror<key: VarInt> {
             None {},
             LeftRight {},
             FrontBack {}
         },
 
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
         enum Rotation<key: VarInt> {
             None {},
             Clockwise90 {},
