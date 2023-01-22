@@ -514,7 +514,7 @@ registry! {
         #[derive(Clone)]
         struct ItemStack {
             item_id: VarInt,
-            item_data: u8,
+            count: u8,
             tag: EnsuredCompoundTag<0>
         },
 
