@@ -1968,8 +1968,8 @@ registry! {
         },
 
         struct SetChunkCacheCenter {
-            x: i32,
-            z: i32
+            x: VarInt,
+            z: VarInt
         },
 
         struct SetChunkCacheRadius {
