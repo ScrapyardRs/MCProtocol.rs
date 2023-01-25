@@ -1539,6 +1539,7 @@ registry! {
             location: SimpleLocation,
             x_rot: u8,
             y_rot: u8,
+            y_head_rot: u8,
             data: VarInt,
             xa: u16,
             ya: u16,
