@@ -2,8 +2,9 @@ use crate::common::bit_set::{BitSet, FixedBitSet};
 use crate::common::chat::Chat;
 use crate::common::chunk::Chunk;
 use crate::common::play::{
-    BlockPos, ChatBind, CommandNode, Difficulty, GlobalPos, InteractionHand, ItemStack, Location,
-    MapColorPatch, MessageSignature, PackedMessageBody, PackedMessageSignature, SimpleLocation,
+    BlockPos, BlockUpdate, ChatBind, CommandNode, Difficulty, GlobalPos, InteractionHand,
+    ItemStack, Location, MapColorPatch, MessageSignature, PackedMessageBody,
+    PackedMessageSignature, SectionPos, SimpleLocation,
 };
 use crate::common::play::{RecipeBookType, RemoteChatSession};
 use crate::common::{GameProfile, GameProfileProperty};
@@ -1918,9 +1919,9 @@ registry! {
         },
 
         struct SectionBlocksUpdate {
-            section_pos: u64,
+            section_pos: SectionPos,
             suppress_light_update: bool,
-            update_info: Vec<VarLong>
+            update_info: Vec<BlockUpdate>
         },
 
         struct SelectAdvancementsTab {

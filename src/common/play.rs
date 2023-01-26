@@ -4,7 +4,7 @@ use drax::prelude::{
     AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxWriteExt, PacketComponent, Size, Uuid,
 };
 use drax::transport::packet::option::Maybe;
-use drax::transport::packet::primitive::VarInt;
+use drax::transport::packet::primitive::{VarInt, VarLong};
 use drax::transport::packet::serde_json::JsonDelegate;
 use drax::transport::packet::string::LimitedString;
 use drax::transport::packet::vec::{LimitedVec, VecU8};
@@ -471,6 +471,107 @@ impl<C: Send + Sync> PacketComponent<C> for CommandNode {
             }
         }
         Ok(size)
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct SectionPos {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+impl<C: Send + Sync> PacketComponent<C> for SectionPos {
+    type ComponentType = SectionPos;
+
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
+        context: &'a mut C,
+        read: &'a mut A,
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
+        Box::pin(async move {
+            let v = u64::decode(context, read).await?;
+            Ok(SectionPos {
+                x: (v >> 42) as i32,
+                y: (v << 44 >> 44) as i32,
+                z: (v << 22 >> 42) as i32,
+            })
+        })
+    }
+
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
+        component_ref: &'a Self::ComponentType,
+        context: &'a mut C,
+        write: &'a mut A,
+    ) -> PinnedLivelyResult<'a, ()> {
+        Box::pin(async move {
+            let v = ((component_ref.x as u64 & 4194303) << 42)
+                | (component_ref.y as u64 & 1048575)
+                | ((component_ref.z as u64 & 4194303) << 20);
+            u64::encode(&v, context, write).await
+        })
+    }
+
+    fn size(_: &Self::ComponentType, _: &mut C) -> drax::prelude::Result<Size> {
+        Ok(Size::Constant(size_of::<u64>()))
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct BlockUpdate {
+    pub block_id: i32,
+    pub block_pos: BlockPos,
+}
+
+impl BlockUpdate {
+    fn pack_pos(&self) -> u16 {
+        let pos = self.block_pos;
+        (((pos.x & 15) << 8) | ((pos.z & 15) << 4) | (pos.y & 15)) as u16
+    }
+
+    fn unpack_pos(packed: u16) -> BlockPos {
+        BlockPos {
+            x: ((packed >> 8) & 15) as i32,
+            y: (packed & 15) as i32,
+            z: ((packed >> 4) & 15) as i32,
+        }
+    }
+}
+
+impl<C: Send + Sync> PacketComponent<C> for BlockUpdate {
+    type ComponentType = BlockUpdate;
+
+    fn decode<'a, A: AsyncRead + Unpin + Send + Sync + ?Sized>(
+        context: &'a mut C,
+        read: &'a mut A,
+    ) -> PinnedLivelyResult<'a, Self::ComponentType> {
+        Box::pin(async move {
+            let packed = VarLong::decode(context, read).await?;
+            let block_id = (packed >> 12) as i32;
+            let packed_section = (packed & 4095) as u32 as u16;
+            let block_pos = BlockUpdate::unpack_pos(packed_section);
+            Ok(BlockUpdate {
+                block_id,
+                block_pos,
+            })
+        })
+    }
+
+    fn encode<'a, A: AsyncWrite + Unpin + Send + Sync + ?Sized>(
+        component_ref: &'a Self::ComponentType,
+        context: &'a mut C,
+        write: &'a mut A,
+    ) -> PinnedLivelyResult<'a, ()> {
+        Box::pin(async move {
+            let packed_section = component_ref.pack_pos();
+            let packed = ((component_ref.block_id as u64) << 12) | (packed_section as u64);
+            VarLong::encode(&(packed as i64), context, write).await
+        })
+    }
+
+    fn size(input: &Self::ComponentType, context: &mut C) -> drax::prelude::Result<Size> {
+        let packed_section = input.pack_pos();
+        let packed = ((input.block_id as u64) << 12) | (packed_section as u64);
+        VarLong::size(&(packed as i64), context)
     }
 }
 
