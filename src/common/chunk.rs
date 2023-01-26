@@ -634,12 +634,12 @@ impl Chunk {
         i << 4
     }
 
-    const fn get_min_section(&self) -> i32 {
-        Self::section_coord_from(self.min_height)
+    const fn get_min_section(min_y: i32) -> i32 {
+        Self::section_coord_from(min_y)
     }
 
-    const fn get_section_index(&self, y: i32) -> i32 {
-        Self::section_coord_from(y) - self.get_min_section()
+    const fn get_section_index(min_y: i32, y: i32) -> i32 {
+        Self::section_coord_from(y) - Self::get_min_section(min_y)
     }
 
     pub fn get_block_id(
@@ -648,7 +648,7 @@ impl Chunk {
         y: i32,
         z: i32,
     ) -> std::result::Result<i32, BitSetValidationError> {
-        let section_index = self.get_section_index(y);
+        let section_index = Self::get_section_index(self.min_height, y);
         if section_index < 0 || self.chunk_sections.len() <= section_index as usize {
             return Ok(0.into());
         }
@@ -661,7 +661,7 @@ impl Chunk {
         y: i32,
         block_id: i32,
     ) -> std::result::Result<(), BitSetValidationError> {
-        let section_index = self.get_section_index(y);
+        let section_index = Self::get_section_index(self.min_height, y);
         if section_index < 0 || self.chunk_sections.len() <= section_index as usize {
             return Err(BitSetValidationError(format!("Out of range.")));
         }
@@ -684,7 +684,7 @@ impl Chunk {
         z: i32,
         block_id: i32,
     ) -> std::result::Result<(), BitSetValidationError> {
-        let section_index = self.get_section_index(y);
+        let section_index = Self::get_section_index(self.min_height, y);
         if section_index < 0 || self.chunk_sections.len() <= section_index as usize {
             return Err(BitSetValidationError(format!("Out of range.")));
         }
