@@ -474,7 +474,7 @@ impl<C: Send + Sync> PacketComponent<C> for CommandNode {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct SectionPos {
     x: i32,
     y: i32,
