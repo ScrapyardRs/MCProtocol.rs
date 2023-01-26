@@ -476,9 +476,9 @@ impl<C: Send + Sync> PacketComponent<C> for CommandNode {
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct SectionPos {
-    x: i32,
-    y: i32,
-    z: i32,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
 }
 
 impl<C: Send + Sync> PacketComponent<C> for SectionPos {
