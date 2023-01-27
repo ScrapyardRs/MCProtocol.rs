@@ -6,7 +6,7 @@ use drax::prelude::{
 use drax::transport::buffer::var_num::size_var_int;
 use drax::transport::packet::option::Maybe;
 use drax::{components, err_explain, throw_explain, PinnedLivelyResult};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::common::bit_storage::{BitSetValidationError, BitStorage};
 use crate::common::play::ceil_log_2;
@@ -543,7 +543,7 @@ impl HeightMaps {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Chunk {
     min_height: i32,
     max_height: i32,
@@ -551,6 +551,14 @@ pub struct Chunk {
     chunk_z: i32,
     height_maps: HeightMaps,
     chunk_sections: Vec<ChunkSection>,
+}
+
+impl PartialEq for Chunk {
+    fn eq(&self, other: &Self) -> bool {
+        self.min_height == other.min_height
+            && self.max_height == other.max_height
+            && self.chunk_sections.eq(&other.chunk_sections)
+    }
 }
 
 const BLOCKS_PER_SECTION: i32 = 16;
@@ -837,17 +845,43 @@ impl CachedLevel {
         }
     }
 
+    pub fn clone_necessary_chunk(&self, x: i32, z: i32) -> Option<Chunk> {
+        if self.knows_chunk(x, z) || self.knows_neighbors(x, z) {
+            Some(self.clone_cached(x, z))
+        } else {
+            None
+        }
+    }
+
+    pub fn knows_chunk(&self, x: i32, z: i32) -> bool {
+        self.chunk_cache.contains_key(&(x, z))
+    }
+
+    pub fn knows_neighbors(&self, x: i32, z: i32) -> bool {
+        self.knows_chunk(x - 1, z)
+            || self.knows_chunk(x + 1, z)
+            || self.knows_chunk(x, z - 1)
+            || self.knows_chunk(x, z + 1)
+            || self.knows_chunk(x - 1, z - 1)
+            || self.knows_chunk(x + 1, z + 1)
+            || self.knows_chunk(x - 1, z + 1)
+            || self.knows_chunk(x + 1, z - 1)
+    }
+
     pub fn insert_region(&mut self, region: BasicRegion) {
+        let empty = Chunk::new(0, 0);
         for region_x in region.chunks {
             for chunk in region_x {
                 if let Some(chunk) = chunk {
-                    self.chunk_cache.insert(
-                        (
-                            (region.offset_x * 32) + chunk.chunk_x,
-                            (region.offset_z * 32) + chunk.chunk_z,
-                        ),
-                        chunk,
-                    );
+                    if chunk.ne(&empty) {
+                        self.chunk_cache.insert(
+                            (
+                                (region.offset_x * 32) + chunk.chunk_x,
+                                (region.offset_z * 32) + chunk.chunk_z,
+                            ),
+                            chunk,
+                        );
+                    }
                 }
             }
         }
