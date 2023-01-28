@@ -195,6 +195,8 @@ registry! {
             inside: bool
         },
 
+
+        #[derive(PartialEq, Eq, Clone, Copy, Hash)]
         enum Direction<key: VarInt> {
             Down {},
             Up {},
