@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use drax::{components, err_explain, PinnedLivelyResult, throw_explain};
 use drax::nbt::{EnsuredCompoundTag, Tag};
 use drax::prelude::{
     AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxReadExt, DraxWriteExt, PacketComponent,
@@ -8,6 +7,7 @@ use drax::prelude::{
 };
 use drax::transport::buffer::var_num::size_var_int;
 use drax::transport::packet::option::Maybe;
+use drax::{components, err_explain, throw_explain, PinnedLivelyResult};
 
 use crate::common::bit_storage::{BitSetValidationError, BitStorage};
 use crate::common::play::ceil_log_2;
@@ -828,6 +828,11 @@ pub struct CachedLevel {
 }
 
 impl CachedLevel {
+    pub fn insert_chunk(&mut self, chunk: Chunk) {
+        self.chunk_cache
+            .insert((chunk.chunk_x, chunk.chunk_z), chunk);
+    }
+
     pub fn clone_cached_or_insert(&mut self, x: i32, z: i32) -> Chunk {
         if self.chunk_cache.contains_key(&(x, z)) {
             self.chunk_cache.get(&(x, z)).cloned().unwrap()
