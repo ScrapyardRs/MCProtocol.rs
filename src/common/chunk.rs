@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use drax::{components, err_explain, PinnedLivelyResult, throw_explain};
 use drax::nbt::{EnsuredCompoundTag, Tag};
 use drax::prelude::{
     AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxReadExt, DraxWriteExt, PacketComponent,
@@ -5,8 +8,6 @@ use drax::prelude::{
 };
 use drax::transport::buffer::var_num::size_var_int;
 use drax::transport::packet::option::Maybe;
-use drax::{components, err_explain, throw_explain, PinnedLivelyResult};
-use std::collections::{HashMap, HashSet};
 
 use crate::common::bit_storage::{BitSetValidationError, BitStorage};
 use crate::common::play::ceil_log_2;
@@ -80,7 +81,7 @@ impl Strategy {
 }
 
 // todo: update palette to take a "state"?
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Palette {
     SingleValue { block_type_id: i32 },
     Indirect { palette: Vec<i32> },
@@ -132,7 +133,7 @@ impl Palette {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PaletteContainer {
     bits_per_entry: u8,
     palette: Palette,
@@ -325,7 +326,7 @@ impl PaletteContainer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ChunkSection {
     block_count: u16,
     states: PaletteContainer,
@@ -557,7 +558,7 @@ impl PartialEq for Chunk {
     fn eq(&self, other: &Self) -> bool {
         self.min_height == other.min_height
             && self.max_height == other.max_height
-            && self.chunk_sections.eq(&other.chunk_sections)
+            && self.chunk_sections == other.chunk_sections
     }
 }
 

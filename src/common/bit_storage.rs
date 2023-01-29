@@ -3,7 +3,7 @@ use drax::transport::packet::primitive::VarInt;
 use drax::{err_explain, throw_explain};
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BitStorage {
     ZeroStorage { size: i32, raw: Vec<i64> },
     SimpleStorage { size: i32, bits: i32, raw: Vec<i64> },
