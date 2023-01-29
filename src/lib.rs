@@ -2,6 +2,7 @@
 #![feature(iter_next_chunk)]
 #![feature(int_roundings)]
 #![feature(variant_count)]
+#![feature(once_cell)]
 
 extern crate core;
 macro_rules! registry_internal {

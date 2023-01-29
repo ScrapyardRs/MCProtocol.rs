@@ -709,3 +709,24 @@ impl ChatBuilder {
         self
     }
 }
+
+#[macro_export]
+macro_rules! msg {
+    () => {{
+        $crate::common::chat::ChatBuilder::text("")
+    }};
+    ($text:expr$(, $color:expr)?) => {{
+        $crate::common::chat::ChatBuilder::text($text)$(.color($color).bold(false).italic(false).underlined(false).strikethrough(false))?
+    }};
+}
+
+#[macro_export]
+macro_rules! combine {
+    ($($chat:expr),+) => {{
+        $crate::common::chat::ChatBuilder::text("").append_extra(vec![$($chat),+])
+    }};
+
+    ($($chat:expr),+ => $color:expr) => {{
+        $crate::common::chat::ChatBuilder::text("").color($color).append_extra(vec![$($chat),+])
+    }};
+}
