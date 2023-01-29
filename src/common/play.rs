@@ -186,6 +186,17 @@ min_max_arg_type! {
 
 registry! {
     components {
+        #[derive(PartialEq, Eq, Clone, Copy, Hash)]
+        enum GameType<key: u8> {
+            Survival {},
+            Creative {},
+            Adventure {},
+            Spectator {},
+            Unset {
+                @key(255);
+            }
+        },
+
         struct BlockHitResult {
             block_pos: BlockPos,
             direction: Direction,

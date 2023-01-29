@@ -2,7 +2,7 @@ use crate::common::bit_set::{BitSet, FixedBitSet};
 use crate::common::chat::Chat;
 use crate::common::chunk::Chunk;
 use crate::common::play::{
-    BlockPos, BlockUpdate, ChatBind, CommandNode, Difficulty, GlobalPos, InteractionHand,
+    BlockPos, BlockUpdate, ChatBind, CommandNode, Difficulty, GameType, GlobalPos, InteractionHand,
     ItemStack, Location, MapColorPatch, MessageSignature, PackedMessageBody,
     PackedMessageSignature, SectionPos, SimpleLocation,
 };
@@ -1744,8 +1744,8 @@ registry! {
         struct ClientLogin {
             player_id: i32,
             hardcore: bool,
-            game_type: u8,
-            previous_game_type: u8,
+            game_type: GameType,
+            previous_game_type: GameType,
             levels: Vec<String>,
             codec: EnsuredCompoundTag<0>,
             dimension_type: String,
@@ -1905,8 +1905,8 @@ registry! {
             dimension_type: String,
             dimension: String,
             seed: u64,
-            game_type: u8,
-            previous_game_type: u8,
+            game_type: GameType,
+            previous_game_type: GameType,
             is_debug: bool,
             is_flat: bool,
             data_to_keep: u8,
