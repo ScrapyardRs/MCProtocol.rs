@@ -1,4 +1,5 @@
 use crate::common::chat::Chat;
+use crate::common::chunk::Chunk;
 use drax::nbt::EnsuredCompoundTag;
 use drax::prelude::{
     AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DraxWriteExt, PacketComponent, Size, Uuid,
@@ -492,6 +493,16 @@ pub struct SectionPos {
     pub x: i32,
     pub y: i32,
     pub z: i32,
+}
+
+impl From<GlobalPos> for SectionPos {
+    fn from(value: GlobalPos) -> Self {
+        SectionPos {
+            x: Chunk::section_coord_from(value.x),
+            y: Chunk::section_coord_from(value.y),
+            z: Chunk::section_coord_from(value.z),
+        }
+    }
 }
 
 impl<C: Send + Sync> PacketComponent<C> for SectionPos {
