@@ -495,8 +495,8 @@ pub struct SectionPos {
     pub z: i32,
 }
 
-impl From<GlobalPos> for SectionPos {
-    fn from(value: GlobalPos) -> Self {
+impl From<BlockPos> for SectionPos {
+    fn from(value: BlockPos) -> Self {
         SectionPos {
             x: Chunk::section_coord_from(value.x),
             y: Chunk::section_coord_from(value.y),
