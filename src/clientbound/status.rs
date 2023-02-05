@@ -27,8 +27,8 @@ pub struct StatusResponse {
     pub version: StatusVersion,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub favicon: Option<String>,
-    #[serde(rename = "enforcesSecureChat")]
-    pub enforces_secure_chat: bool,
+    #[serde(rename = "enforcesSecureChat", skip_serializing_if = "Option::is_none")]
+    pub enforces_secure_chat: Option<bool>,
 }
 
 registry! {
