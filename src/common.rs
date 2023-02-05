@@ -18,9 +18,14 @@ struct_packet_components! {
     }
 }
 
+#[cfg(feature = "play")]
 pub mod bit_set;
+#[cfg(feature = "play")]
 pub mod bit_storage;
 pub mod chat;
+#[cfg(feature = "play")]
 pub mod chunk;
+#[cfg(feature = "play")]
 pub mod play;
+#[cfg(feature = "play")]
 pub mod registry;
