@@ -11,8 +11,8 @@ pub struct Player {
 pub struct StatusPlayers {
     pub max: isize,
     pub online: isize,
-    #[serde(default)]
-    pub sample: Vec<Player>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sample: Option<Vec<Player>>,
 }
 
 #[derive(Debug, serde_derive::Serialize, serde_derive::Deserialize)]
